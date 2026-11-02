@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draftić</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 46 46'%3E%3Crect x='17' y='10' width='28' height='26' rx='2' fill='%230f1013'/%3E%3Crect x='1' y='10' width='17' height='26' rx='2' fill='%23f6f1e7' stroke='%231b1a18' stroke-width='2'/%3E%3Cpath d='M6.5 18.5 10.5 15.5V30' fill='none' stroke='%231b1a18' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M23 20.5H40M23 26H34' stroke='%23ffb23f' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Graduate&family=Teko:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css?v=14">
+</head>
+<body>
+  <main class="sheet">
+
+    <!-- PRE-GAME FORM -->
+    <section class="screen" id="screen-menu">
+      <!-- The draft stage: the same LED hardware as the board in the game -->
+      <div class="stage">
+        <h1 class="wordmark stage-brand"><svg class="mark" viewBox="0 0 46 28" aria-hidden="true"><rect class="mark-bar" x="16" y="1" width="29" height="26" rx="1.5"/><rect class="mark-chip" x="1" y="1" width="16" height="26" rx="1.5"/><path class="mark-no" d="M7 9.5 10.5 7V21.5"/><path class="mark-led" d="M22 11.5H39M22 17H33"/></svg><span aria-label="Draftić">Drafti<span class="acute">c</span></span></h1>
+        <p class="stage-pitch">A two-player basketball draft. Ten picks each, two at every position, scored on a stat nobody picks: it's dealt when the draft starts.</p>
+
+        <div class="stage-board" aria-hidden="true">
+          <div class="stage-round">
+            <span>Round 1</span>
+            <span class="stage-crit">PG &middot; Played for Fenerbah&ccedil;e</span>
+          </div>
+          <ol class="stage-picks">
+            <li class="tile x now"><span class="tile-no">1</span><span class="tile-team">A</span><span class="tile-name">On the clock</span><span class="tile-side"><span class="tile-slot">PG</span></span></li>
+            <li class="tile o upcoming"><span class="tile-no">2</span><span class="tile-team">B</span><span class="tile-name"></span><span class="tile-side"><span class="tile-slot">PG</span></span></li>
+            <li class="tile o upcoming"><span class="tile-no">3</span><span class="tile-team">B</span><span class="tile-name"></span><span class="tile-side"><span class="tile-slot">SG</span></span></li>
+            <li class="tile x upcoming"><span class="tile-no">4</span><span class="tile-team">A</span><span class="tile-name"></span><span class="tile-side"><span class="tile-slot">SG</span></span></li>
+          </ol>
+        </div>
+
+        <ol class="stage-steps">
+          <li><b>The draft deals a stat to win on,</b> from height, weight and age to career points, assists or games.</li>
+          <li><b>Each round deals a position and a criterion,</b> and both teams draft a player who fits. The order swings: A&nbsp;B, B&nbsp;A.</li>
+          <li><b>The numbers go up on the board</b> and the scoreboard adds up who drafted best.</li>
+        </ol>
+        <p class="stage-note">Unofficial fan game, not affiliated with the NBA, EuroLeague or any club.</p>
+      </div>
+
+      <!-- The settings desk -->
+      <div class="desk">
+        <header class="desk-head">
+          <h2 class="desk-title">Set up the draft</h2>
+        </header>
+        <form class="setup" id="setup-form" autocomplete="off" data-mode="hotseat">
+          <fieldset class="field field-play">
+            <legend class="field-label">Play</legend>
+            <div class="choices choices-wide">
+              <label class="choice">
+                <input type="radio" name="mode" value="hotseat" checked>
+                <span class="choice-box" aria-hidden="true"></span>
+                <span class="choice-text">Same device<small>pass the phone or share the laptop</small></span>
+              </label>
+              <label class="choice">
+                <input type="radio" name="mode" value="online">
+                <span class="choice-box" aria-hidden="true"></span>
+                <span class="choice-text">Online room<small>each player on their own device, with a room code</small></span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="field join-field only-online">
+            <label class="line-field">
+              <span class="field-label">Your name</span>
+              <input type="text" id="name-online" value="" placeholder="Player" maxlength="16" spellcheck="false">
+            </label>
+            <div class="join-row">
+              <label class="line-field">
+                <span class="field-label">Have a code?</span>
+                <input type="text" id="join-code" maxlength="5" placeholder="KQRMZ" spellcheck="false" autocapitalize="characters">
+              </label>
+              <button type="button" class="btn btn-line" id="btn-join-room">Join room</button>
+            </div>
+            <p class="hint">Or set up a new room below and send the code to your opponent.</p>
+          </div>
+
+          <fieldset class="field field-competition">
+            <legend class="field-label">Competition</legend>
+            <div class="choices choices-wide">
+              <label class="choice">
+                <input type="radio" name="league" value="nba" checked>
+                <span class="choice-box" aria-hidden="true"></span>
+                <span class="choice-text">NBA<small>30 franchises &middot; 4,600+ players since 1946</small></span>
+              </label>
+              <label class="choice">
+                <input type="radio" name="league" value="euroleague">
+                <span class="choice-box" aria-hidden="true"></span>
+                <span class="choice-text">EuroLeague<small>23 clubs &middot; 2,200+ players since 2000</small></span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="field field-criteria">
+            <legend class="field-label">Round criteria</legend>
+            <div class="choices choices-wide">
+              <label class="choice">
+                <input type="radio" name="style" value="classic" checked>
+                <span class="choice-box" aria-hidden="true"></span>
+                <span class="choice-text">Classic<small>teams and birth countries</small></span>
+              </label>
+              <label class="choice">
+                <input type="radio" name="style" value="mixed">
+                <span class="choice-box" aria-hidden="true"></span>
+                <span class="choice-text">Mixed<small>adds decades and colleges</small></span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="field field-list">
+            <legend class="field-label">Player search</legend>
+            <div class="choices choices-wide">
+              <label class="choice">
+                <input type="radio" name="pick_mode" value="eligible" checked>
+                <span class="choice-box" aria-hidden="true"></span>
+                <span class="choice-text">Eligible only<small>the search lists only players who fit the round</small></span>
+              </label>
+              <label class="choice">
+                <input type="radio" name="pick_mode" value="extreme">
+                <span class="choice-box" aria-hidden="true"></span>
+                <span class="choice-text">Extreme<small>every player in the league; a wrong pick gets you the lowest number who fits</small></span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="field field-reveal">
+            <legend class="field-label">Reveal the numbers</legend>
+            <div class="choices choices-wide">
+              <label class="choice">
+                <input type="radio" name="reveal" value="end" checked>
+                <span class="choice-box" aria-hidden="true"></span>
+                <span class="choice-text">After the last pick<small>every number stays hidden until the draft is over</small></span>
+              </label>
+              <label class="choice">
+                <input type="radio" name="reveal" value="live">
+                <span class="choice-box" aria-hidden="true"></span>
+                <span class="choice-text">As you go<small>each player's number shows once drafted, totals add up live</small></span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="field field-clock">
+            <legend class="field-label">Shot clock per pick</legend>
+            <div class="choices">
+              <label class="choice"><input type="radio" name="clock" value="30"><span class="choice-box" aria-hidden="true"></span><span class="choice-text">30 sec</span></label>
+              <label class="choice"><input type="radio" name="clock" value="60" checked><span class="choice-box" aria-hidden="true"></span><span class="choice-text">60 sec</span></label>
+              <label class="choice"><input type="radio" name="clock" value="120"><span class="choice-box" aria-hidden="true"></span><span class="choice-text">120 sec</span></label>
+              <label class="choice"><input type="radio" name="clock" value="0"><span class="choice-box" aria-hidden="true"></span><span class="choice-text">Off</span></label>
+            </div>
+          </fieldset>
+
+          <div class="field stats-field">
+            <span class="field-label">Stats this draft can be scored on</span>
+            <ul class="stat-list" id="stat-list"></ul>
+            <p class="hint">One is dealt at random when the draft starts, and both teams draft for it.</p>
+          </div>
+
+          <div class="field teams-field only-hotseat">
+            <label class="line-field">
+              <span class="field-label">Team <b class="ink-x">A</b></span>
+              <input type="text" id="name-p1" value="Player 1" maxlength="16" spellcheck="false">
+            </label>
+            <label class="line-field">
+              <span class="field-label">Team <b class="ink-o">B</b></span>
+              <input type="text" id="name-p2" value="Player 2" maxlength="16" spellcheck="false">
+            </label>
+          </div>
+
+          <div class="setup-go">
+            <button type="submit" class="btn btn-ink btn-tipoff" id="btn-launch-game">Start the draft</button>
+            <p class="form-error" id="menu-error" role="alert"></p>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- JOIN FROM A LINK -->
+    <section class="screen hidden" id="screen-join">
+      <header class="form-head">
+        <div>
+          <h1 class="wordmark">Room <span id="join-code-title">&mdash;</span></h1>
+          <p class="form-sub">You've been invited to a draft</p>
+        </div>
+        <span class="form-no">Online</span>
+      </header>
+      <div class="field">
+        <span class="field-label">Game options</span>
+        <p class="join-info" id="join-settings">Looking up the room...</p>
+      </div>
+      <div class="field" id="join-name-field">
+        <label class="line-field">
+          <span class="field-label">Your name</span>
+          <input type="text" id="join-name" value="" placeholder="Player" maxlength="16" spellcheck="false">
+        </label>
+      </div>
+      <div class="join-actions">
+        <button type="button" class="btn btn-ink btn-tipoff" id="btn-join-ready" disabled>Ready</button>
+        <button type="button" class="btn btn-line" id="btn-join-menu" hidden>Go to the menu</button>
+      </div>
+      <p class="form-error" id="join-error" role="alert"></p>
+    </section>
+
+    <!-- ONLINE LOBBY -->
+    <section class="screen hidden" id="screen-lobby">
+      <header class="form-head">
+        <div>
+          <h1 class="wordmark">Room <span id="lobby-code">&mdash;</span></h1>
+          <p class="form-sub" id="lobby-settings">Connecting...</p>
+        </div>
+        <span class="form-no">Online</span>
+      </header>
+      <div class="field" id="lobby-invite">
+        <span class="field-label">Invite a player</span>
+        <div class="invite">
+          <code id="lobby-link"></code>
+          <button type="button" class="btn btn-line" id="btn-copy-link">Copy link</button>
+        </div>
+      </div>
+      <div class="field">
+        <span class="field-label">Players</span>
+        <ul class="seats" id="lobby-seats"></ul>
+        <p class="hint" id="lobby-hint"></p>
+      </div>
+      <div class="lobby-actions">
+        <button type="button" class="btn btn-line" id="btn-lobby-leave">Leave room</button>
+        <button type="button" class="btn btn-ink btn-tipoff" id="btn-ready" disabled>Ready</button>
+      </div>
+      <p class="form-error" id="lobby-error" role="alert"></p>
+    </section>
+
+    <!-- DRAFT SHEET -->
+    <section class="screen hidden" id="screen-game">
+      <header class="game-head">
+        <span class="wordmark wordmark-small"><svg class="mark" viewBox="0 0 46 28" aria-hidden="true"><rect class="mark-bar" x="16" y="1" width="29" height="26" rx="1.5"/><rect class="mark-chip" x="1" y="1" width="16" height="26" rx="1.5"/><path class="mark-no" d="M7 9.5 10.5 7V21.5"/><path class="mark-led" d="M22 11.5H39M22 17H33"/></svg><span aria-label="Draftić">Drafti<span class="acute">c</span></span></span>
+        <dl class="meta">
+          <div><dt>Competition</dt><dd id="meta-league">NBA</dd></div>
+          <div><dt>Category</dt><dd id="meta-category">Height</dd></div>
+          <div><dt>Reveal</dt><dd id="meta-reveal">At the end</dd></div>
+          <div><dt>Round</dt><dd id="meta-round">&mdash;</dd></div>
+          <div><dt>Search</dt><dd id="meta-mode">&mdash;</dd></div>
+          <div id="meta-room-wrap" hidden><dt>Room</dt><dd id="meta-room"></dd></div>
+        </dl>
+        <nav class="head-actions">
+          <button type="button" class="btn-text btn-sound" id="btn-sound" aria-pressed="false" title="Sound on or off">
+            <svg class="sound-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path class="speaker" d="M4 9h4l5-4v14l-5-4H4z"/>
+              <path class="waves" d="M16 9c1.3 1.6 1.3 4.4 0 6M18.5 6.5c2.6 3 2.6 8 0 11"/>
+              <path class="cross" d="M16 9l5 6M21 9l-5 6"/>
+            </svg>
+            <span id="sound-label">Sound</span>
+          </button>
+          <button type="button" class="btn-text" id="btn-game-rules">Rules</button>
+          <button type="button" class="btn-text" id="btn-game-exit">Menu</button>
+        </nav>
+      </header>
+
+      <div class="table-row">
+        <div class="team team-x" id="panel-x">
+          <span class="team-mark">A</span>
+          <div class="team-body">
+            <span class="team-label">Team A</span>
+            <span class="team-name" id="text-name-x">Player 1</span>
+          </div>
+          <div class="score-led" id="score-x" role="img" aria-label="Total height not shown yet">
+            <svg class="score-digits" viewBox="0 0 108 46" aria-hidden="true"></svg>
+            <span class="score-label total-label">Total height</span>
+          </div>
+          <span class="possession">On the clock</span>
+          <span class="presence">Connection lost</span>
+        </div>
+
+        <div class="clock" id="shotclock-display" aria-label="Shot clock">
+          <svg class="clock-digits" id="clock-digits" viewBox="0 0 54 46" aria-hidden="true"></svg>
+          <span class="clock-label">Shot clock</span>
+        </div>
+
+        <div class="team team-o" id="panel-o">
+          <span class="team-mark">B</span>
+          <div class="team-body">
+            <span class="team-label">Team B</span>
+            <span class="team-name" id="text-name-o">Player 2</span>
+          </div>
+          <div class="score-led" id="score-o" role="img" aria-label="Total height not shown yet">
+            <svg class="score-digits" viewBox="0 0 108 46" aria-hidden="true"></svg>
+            <span class="score-label total-label">Total height</span>
+          </div>
+          <span class="possession">On the clock</span>
+          <span class="presence">Connection lost</span>
+        </div>
+      </div>
+
+      <p class="status" id="game-status-text" role="status" aria-live="polite"></p>
+
+      <div class="draft-main">
+        <section class="podium" aria-label="This round">
+          <div class="card" id="round-card">
+            <span class="card-pick" id="card-pick">Pick 1 of 20</span>
+            <span class="card-slot" id="card-slot">PG</span>
+            <span class="card-slot-name" id="card-slot-name">Point guard</span>
+            <div class="card-strip">
+              <span class="card-kind" id="card-kind">Team</span>
+              <span class="card-crit" id="card-crit">&mdash;</span>
+            </div>
+            <span class="card-category" id="card-category">Category &middot; Height</span>
+            <span class="card-turn" id="card-turn"></span>
+            <button type="button" class="btn btn-ink btn-draft" id="btn-draft">Draft a player</button>
+          </div>
+          <div class="announce" id="announce" aria-live="polite"></div>
+        </section>
+
+        <!-- The draft board: an LED wall like the arena's, the picks numbered down the columns -->
+        <section class="board" aria-label="Draft board">
+          <header class="board-head">
+            <span class="board-side" id="board-league">NBA Draft</span>
+            <span class="board-round" id="board-round">Round 1</span>
+            <span class="board-side" id="board-category"></span>
+          </header>
+          <ol class="board-picks" id="board-picks"></ol>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <!-- PLAYER SLIP -->
+  <div class="overlay" id="modal-select">
+    <div class="slip" role="dialog" aria-modal="true" aria-labelledby="slip-title">
+      <div class="slip-head">
+        <div>
+          <span class="field-label" id="slip-title">Team A &middot; pick 1</span>
+          <p class="slip-req"><span id="req-slot">&mdash;</span> <span class="slip-x">&times;</span> <span id="req-crit">&mdash;</span></p>
+          <p class="hint" id="slip-hint"></p>
+        </div>
+        <span class="slip-clock" id="modal-clock-num"></span>
+      </div>
+      <div class="slip-input-wrap">
+        <input type="text" id="search-player-input" class="slip-input" placeholder="Start typing a name"
+          autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false"
+          aria-controls="search-results-list" aria-autocomplete="list">
+        <ul class="suggestions" id="search-results-list" role="listbox"></ul>
+      </div>
+      <div class="slip-actions">
+        <button type="button" class="btn btn-line" id="btn-cancel-select">Back to the board</button>
+        <button type="button" class="btn btn-ink" id="btn-confirm-select" disabled>Draft</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- THE STAT: dealt at the start of every draft, over the blurred game -->
+  <div class="overlay deal" id="modal-deal">
+    <div class="deal-card" role="dialog" aria-modal="true" aria-labelledby="deal-stat" aria-describedby="deal-hint">
+      <p class="deal-lead">This draft is scored on</p>
+      <h2 class="deal-stat" id="deal-stat">&mdash;</h2>
+      <p class="deal-hint" id="deal-hint"></p>
+      <p class="deal-scope" id="deal-scope"></p>
+      <button type="button" class="btn btn-tipoff btn-deal" id="btn-deal-go">Start drafting</button>
+    </div>
+  </div>
+
+  <!-- FINAL -->
+  <div class="overlay" id="modal-gameover">
+    <div class="slip final" role="dialog" aria-modal="true" aria-labelledby="go-title">
+      <span class="stamp" id="go-stamp">Final</span>
+      <h2 class="final-title" id="go-title">Player 1 wins</h2>
+      <p class="final-score" id="go-score"></p>
+      <p class="final-desc" id="go-desc"></p>
+      <p class="final-waiting" id="go-waiting" aria-live="polite"></p>
+      <div class="slip-actions">
+        <button type="button" class="btn btn-line" id="btn-return-menu-go">Menu</button>
+        <button type="button" class="btn btn-line" id="btn-see-rosters">See rosters</button>
+        <button type="button" class="btn btn-ink" id="btn-rematch">Rematch</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RULES -->
+  <div class="overlay" id="modal-rules-popup">
+    <div class="slip" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+      <h2 class="slip-title" id="rules-title">How to play</h2>
+      <ol class="rules">
+        <li>Two teams draft ten players each: two point guards, two shooting guards, two small forwards, two power forwards and two centers.</li>
+        <li>Every round names a position and a criterion: a team, a country of birth, a decade or a college. Both teams draft a player who fits both, and nobody can be drafted twice.</li>
+        <li>The order swings every round: A then B, B then A, A then B... The team that picks second in one round picks first in the next.</li>
+        <li>Every draft is scored on one stat, dealt at random when it starts: height, weight, age in last season, or a career total such as games, points, rebounds or assists (NBA drafts can also deal minutes, steals and blocks). The higher team total wins.</li>
+        <li>Career totals count the NBA's regular seasons, or the EuroLeague's games since 2000-01. Only players with a number in the dealt stat can be drafted.</li>
+        <li>The numbers show either after the last pick, revealed one by one on the board, or as you go, as soon as each player is drafted. The scoreboard adds up each team's total either way, and the winner is only called once every number is on the board.</li>
+        <li>An expired shot clock is a turnover: you get the player with the lowest number still left for that round. In <b>Extreme</b> search, a player who doesn't fit, is already taken or has no number in the stat costs the same.</li>
+        <li>When a round is dealt, press <b>Draft a player</b> to search for your pick.</li>
+        <li>Positions come from the player's career (a combo guard fits PG and SG). EuroLeague registrations only say guard, forward or center, so a EuroLeague guard fits both guard slots.</li>
+      </ol>
+      <div class="slip-actions">
+        <button type="button" class="btn btn-ink" id="btn-ack-rules">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/static/js/main.js?v=10"></script>
+</body>
+</html>
