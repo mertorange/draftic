@@ -21,8 +21,10 @@ from typing import Callable, Dict, List, Optional
 DATA_DIR = Path(os.environ.get("DRAFTIC_DATA_DIR") or Path(__file__).resolve().parent / "data")
 LEAGUES = {"nba": "NBA", "euroleague": "EuroLeague"}
 SLOTS = ["PG", "SG", "SF", "PF", "C"]
+# The bench slot: a sixth man who can play any position
+SIXTH_MAN = "6M"
 SLOT_NAMES = {"PG": "Point guard", "SG": "Shooting guard", "SF": "Small forward",
-              "PF": "Power forward", "C": "Center"}
+              "PF": "Power forward", "C": "Center", SIXTH_MAN: "Sixth man (any position)"}
 
 # A round is only dealt when at least this many undrafted players fit it
 MIN_POOL = 8
@@ -210,7 +212,8 @@ class Catalog:
         return Criterion(kind, value, label)
 
     def fits(self, player: Player, slot: str, criterion: Criterion) -> bool:
-        return slot in player.positions and self._tests[criterion.kind](player, criterion.value)
+        plays_it = slot == SIXTH_MAN or slot in player.positions
+        return plays_it and self._tests[criterion.kind](player, criterion.value)
 
     def pool(self, slot: str, criterion: Criterion, category: str, taken=frozenset()) -> List[Player]:
         """Undrafted players who fit the round and have a value in the draft's category."""

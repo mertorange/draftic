@@ -177,7 +177,7 @@ export function renderDraft(state, { names, canPick, mine = null, onRevealed = (
   }
 }
 
-/** The draft order: [mark, round] for picks 1..20 (A, B, then B, A, and so on). */
+/** The draft order: [mark, round] for picks 1..12 (A, B, then B, A, and so on). */
 function pickOrder(state) {
   const order = [];
   for (let r = 0; r < state.rounds; r++) {
@@ -253,14 +253,14 @@ function renderCard(state, names, canPick, mine) {
   if (state.status === 'final') {
     const label = state.category.label.toLowerCase();
     $('card-pick').textContent = 'Draft complete';
-    $('card-slot').textContent = '10';
+    $('card-slot').textContent = String(state.rounds);
     $('card-slot-name').textContent = 'players a side';
     if (resultShown(state)) {
       $('card-kind').textContent = state.category.key === 'height' ? 'Taller roster' : `More ${label}`;
       const w = state.winner;
       $('card-crit').textContent = w === 'draw' ? 'Dead even' : `${names[w]} wins`;
     } else {
-      $('card-kind').textContent = 'All twenty picks are in';
+      $('card-kind').textContent = `All ${state.rounds * 2} picks are in`;
       $('card-crit').textContent = `Adding up the ${label}...`;
     }
     $('card-turn').textContent = '';
@@ -374,7 +374,7 @@ export function finalText(state, names, mine = null) {
     `<span class="o">${O.toLocaleString('en-US')}</span>`;
   const average = (total) => {
     const each = total / state.slots.length;
-    return `${each >= 100 ? Math.round(each).toLocaleString('en-US') : each.toFixed(1)} ${unit}`;
+    return `${each >= 1000 ? Math.round(each).toLocaleString('en-US') : each.toFixed(1)} ${unit}`;
   };
   const desc = w === 'draw'
     ? `The two rosters are level on ${label.toLowerCase()}.`

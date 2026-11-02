@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Graduate&family=Teko:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css?v=14">
+  <link rel="stylesheet" href="/static/style.css?v=16">
 </head>
 <body>
   <main class="sheet">
@@ -18,7 +18,7 @@
       <!-- The draft stage: the same LED hardware as the board in the game -->
       <div class="stage">
         <h1 class="wordmark stage-brand"><svg class="mark" viewBox="0 0 46 28" aria-hidden="true"><rect class="mark-bar" x="16" y="1" width="29" height="26" rx="1.5"/><rect class="mark-chip" x="1" y="1" width="16" height="26" rx="1.5"/><path class="mark-no" d="M7 9.5 10.5 7V21.5"/><path class="mark-led" d="M22 11.5H39M22 17H33"/></svg><span aria-label="Draftić">Drafti<span class="acute">c</span></span></h1>
-        <p class="stage-pitch">A two-player basketball draft. Ten picks each, two at every position, scored on a stat nobody picks: it's dealt when the draft starts.</p>
+        <p class="stage-pitch">A two-player basketball draft. Six picks each, a starting five and a sixth man, scored on a stat nobody picks: it's dealt when the draft starts.</p>
 
         <div class="stage-board" aria-hidden="true">
           <div class="stage-round">
@@ -297,7 +297,7 @@
       <div class="draft-main">
         <section class="podium" aria-label="This round">
           <div class="card" id="round-card">
-            <span class="card-pick" id="card-pick">Pick 1 of 20</span>
+            <span class="card-pick" id="card-pick">Pick 1 of 12</span>
             <span class="card-slot" id="card-slot">PG</span>
             <span class="card-slot-name" id="card-slot-name">Point guard</span>
             <div class="card-strip">
@@ -380,7 +380,7 @@
     <div class="slip" role="dialog" aria-modal="true" aria-labelledby="rules-title">
       <h2 class="slip-title" id="rules-title">How to play</h2>
       <ol class="rules">
-        <li>Two teams draft ten players each: two point guards, two shooting guards, two small forwards, two power forwards and two centers.</li>
+        <li>Two teams draft six players each: a point guard, a shooting guard, a small forward, a power forward, a center, and a sixth man who can play any position.</li>
         <li>Every round names a position and a criterion: a team, a country of birth, a decade or a college. Both teams draft a player who fits both, and nobody can be drafted twice.</li>
         <li>The order swings every round: A then B, B then A, A then B... The team that picks second in one round picks first in the next.</li>
         <li>Every draft is scored on one stat, dealt at random when it starts: height, weight, age in last season, or a career total such as games, points, rebounds or assists (NBA drafts can also deal minutes, steals and blocks). The higher team total wins.</li>
@@ -396,6 +396,6 @@
     </div>
   </div>
 
-  <script type="module" src="/static/js/main.js?v=10"></script>
+  <script type="module" src="/static/js/main.js?v=12"></script>
 </body>
 </html>

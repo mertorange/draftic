@@ -890,12 +890,12 @@ button:disabled { cursor: not-allowed; }
   border-right: 2px solid var(--board-line);
 }
 
-/* Twenty picks, numbered down the columns like the arena board */
+/* Twelve picks, numbered down the columns like the arena board: four columns of three */
 .board-picks {
   list-style: none;
   flex: 1;
   display: grid;
-  grid-template-rows: repeat(5, auto);
+  grid-template-rows: repeat(3, auto);
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   align-content: center;
@@ -1154,7 +1154,7 @@ button:disabled { cursor: not-allowed; }
   .announce { min-height: 0; }
 }
 
-/* Phones: two columns of ten */
+/* Phones: two columns of six */
 @media (max-width: 640px) {
   .sheet:has(> #screen-game:not(.hidden)) { margin: 0; }
   .podium { flex-direction: column; padding: 10px; gap: 8px; }
@@ -1171,7 +1171,7 @@ button:disabled { cursor: not-allowed; }
   .board-head > * { padding: 7px 10px 3px; }
   .board-side { font-size: 15px; }
   .board-round { font-size: 28px; padding-left: 14px; padding-right: 14px; }
-  .board-picks { grid-template-rows: repeat(10, auto); gap: 6px 8px; padding: 12px 8px; }
+  .board-picks { grid-template-rows: repeat(6, auto); gap: 6px 8px; padding: 12px 8px; }
   .tile { grid-template-columns: 30px 24px minmax(0, 1fr) auto; height: 38px; }
   .tile-no { font-size: 26px; padding-top: 4px; }
   .tile-team { font-size: 15px; }
@@ -1191,7 +1191,7 @@ button:disabled { cursor: not-allowed; }
   .team .score-led { grid-area: led; justify-self: center; margin: 0; }
 }
 
-/* Narrow phones: one column of twenty, so the names fit */
+/* Narrow phones: one column of twelve, so the names fit */
 @media (max-width: 480px) {
   .board-picks { grid-template-rows: none; grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: minmax(0, 1fr); gap: 5px; }
 }
@@ -1305,16 +1305,16 @@ button:disabled { cursor: not-allowed; }
   #screen-game:not(.hidden) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .draft-main { flex: 1; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
   .board { min-height: 0; }
-  .board-picks { min-height: 0; grid-template-rows: repeat(5, minmax(0, 1fr)); align-content: stretch; padding-top: 14px; padding-bottom: 14px; }
+  .board-picks { min-height: 0; grid-template-rows: repeat(3, minmax(0, 1fr)); align-content: stretch; padding-top: 14px; padding-bottom: 14px; }
   .board-picks .tile { height: 100%; max-height: 60px; min-height: 0; align-self: center; overflow: hidden; }
 }
-/* Tall screens: bigger tiles, so the board fills its space instead of spreading out */
-@media (min-width: 1240px) and (min-height: 960px) {
-  .board-picks .tile { max-height: 72px; grid-template-columns: 54px 44px minmax(0, 1fr) auto; }
-  .board-picks .tile-no { font-size: 50px; }
-  .board-picks .tile-team { font-size: 28px; }
-  .board-picks .tile-name { font-size: 30px; }
-  .board-picks .tile-value { font-size: 30px; }
+/* Laptops and up: three rows leave room, so bigger tiles fill the board instead of gaps */
+@media (min-width: 1240px) and (min-height: 700px) {
+  .board-picks .tile { max-height: 72px; grid-template-columns: 50px 40px minmax(0, 1fr) auto; }
+  .board-picks .tile-no { font-size: 46px; }
+  .board-picks .tile-team { font-size: 26px; }
+  .board-picks .tile-name { font-size: 26px; }
+  .board-picks .tile-value { font-size: 27px; }
 }
 
 /* Short laptop screens: the round band a size down */

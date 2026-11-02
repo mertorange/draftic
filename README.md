@@ -3,7 +3,8 @@
 A two-player basketball draft game, in the spirit of Draftinho, on the same scoresheet design as
 [Hoop-Tac-Toe](https://github.com/mertorange/basketball-xox).
 
-Two teams draft ten players each: two at every position (PG, SG, SF, PF, C). Every round deals
+Two teams draft six players each: a starting five (PG, SG, SF, PF, C) and a sixth man of any
+position. Every round deals
 one slot plus one random criterion, such as *PG · Fenerbahçe* or *C · Born in Serbia*. Both teams
 draft a player who fits it. Every draft is scored on a stat dealt at random when it starts
 (height, points, assists, age...), and the higher team total wins.
@@ -18,7 +19,8 @@ draft a player who fits it. Every draft is scored on a stat dealt at random when
 
    NBA totals are regular-season NBA (and BAA) games, not the ABA; EuroLeague totals are its
    games since 2000-01. Only players with a number in the dealt stat can be drafted.
-2. **Ten rounds:** PG, SG, SF, PF, C, then the same five again.
+2. **Six rounds, twelve picks:** PG, SG, SF, PF, C, then the sixth man, who can play any
+   position.
 3. **Pick order swings:** A then B, B then A, A then B... Rematches swap who starts.
 4. **Criteria:** *Classic* deals teams and countries of birth. *Mixed* adds decades and (NBA)
    colleges. Every round is dealt so at least 8 undrafted players fit it.

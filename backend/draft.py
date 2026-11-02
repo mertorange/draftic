@@ -1,8 +1,9 @@
-"""One draft: two teams, ten rounds, one slot and one criterion per round.
+"""One draft: two teams, six rounds, one slot and one criterion per round.
 
-Rounds go PG, SG, SF, PF, C, then the same five again, so each team ends with two players
-at every position. Both teams pick in every round, for the same slot and criterion, and
-the order alternates: A then B, B then A, A then B... (A is whoever starts this draft).
+Rounds go PG, SG, SF, PF, C, then a sixth man of any position, so each team ends with a
+starting five and one player off the bench: twelve picks in all. Both teams pick in every
+round, for the same slot and criterion, and the order alternates: A then B, B then A, A then
+B... (A is whoever starts this draft).
 
 Rosters are scored on one category, dealt at random when the draft starts among the ones
 the league has data for (height, weight, points, assists... see catalog.CATEGORIES); the
@@ -20,9 +21,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from .catalog import CATEGORIES, SLOT_NAMES, SLOTS, Catalog, Category, Criterion, Player
+from .catalog import CATEGORIES, SIXTH_MAN, SLOT_NAMES, SLOTS, Catalog, Category, Criterion, Player
 
-ROUNDS = SLOTS * 2
+ROUNDS = SLOTS + [SIXTH_MAN]
 MARKS = ("X", "O")
 PICK_MODES = ("eligible", "extreme")
 REVEALS = ("end", "live")

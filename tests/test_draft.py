@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import app
 from backend.catalog import CATEGORIES, MIN_POOL, SLOTS, load_catalogs
-from backend.draft import Draft, DraftError
+from backend.draft import ROUNDS, Draft, DraftError
 
 CATALOGS = load_catalogs()
 
@@ -67,9 +67,20 @@ def test_full_draft_two_per_slot(league, style):
         assert draft.status == "final"
         for mark in "XO":
             slots = [p.slot for p in draft.picks[mark]]
-            assert sorted(slots) == sorted(SLOTS * 2)
+            assert slots == ["PG", "SG", "SF", "PF", "C", "6M"]
         ids = [p.player.id for p in draft.log]
-        assert len(ids) == len(set(ids)) == 20
+        assert len(ids) == len(set(ids)) == 12
+
+
+def test_sixth_man_takes_any_position():
+    draft = Draft(CATALOGS["nba"], seed=8, category="points")
+    while draft.slot != "6M":
+        draft.pick(draft.on_clock, draft.public()["pool"][0]["id"])
+    state = draft.public()
+    assert state["current"]["slot_name"] == "Sixth man (any position)"
+    positions = {s for p in draft.pool() for s in p.positions}
+    assert positions == set(SLOTS)  # guards, forwards and centers all fit
+    assert len(ROUNDS) == 6
 
 
 def test_pick_order_alternates_each_round():
