@@ -1,4 +1,5 @@
 import pytest
+from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
 
 from backend.app import app
@@ -202,3 +203,27 @@ def test_online_room_full_draft(client):
         b.send_json({"type": "rematch"})
         room = a.receive_json(); b.receive_json()
         assert room["draft_no"] == 2 and room["draft"]["on_clock"] == "O"
+
+
+def test_rate_limits_refuse_bursts():
+    from backend.app import create_app
+    from backend.limits import Limits
+
+    limited = TestClient(create_app(Limits(create=(1, 2), api=(1, 3), sockets=(1, 1))))
+    codes = [limited.post("/api/drafts", json={"league": "nba"}).status_code for _ in range(3)]
+    assert codes == [200, 200, 429]
+    refused = limited.post("/api/rooms", json={"league": "nba"})
+    assert refused.status_code == 429 and int(refused.headers["retry-after"]) > 0
+    assert [limited.get("/api/leagues").status_code for _ in range(4)] == [200, 200, 200, 429]
+    assert limited.get("/health").status_code == 200  # only the API is limited
+
+    with limited.websocket_connect("/ws/rooms/ABCDE") as ws:
+        assert ws.receive_json()["type"] == "error"  # no such room, but the socket was let in
+    with pytest.raises(WebSocketDisconnect):  # the second handshake is refused
+        with limited.websocket_connect("/ws/rooms/ABCDE") as ws:
+            ws.receive_json()
+
+
+def test_oversized_requests_refused(client):
+    big = {"league": "nba", "padding": "x" * 20_000}
+    assert client.post("/api/rooms", json=big).status_code == 413

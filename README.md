@@ -85,3 +85,16 @@ frontend/
        slip.js (player search) · names.js · online.js · clock.js · sound.js · api.js · dom.js
 tests/test_draft.py
 ```
+
+### Docker
+```bash
+docker compose up --build   # http://localhost:8010
+```
+The server keeps drafts and rooms in memory, so it runs as a single process. Behind a reverse
+proxy, set `FORWARDED_ALLOW_IPS` to the proxy's address so rate limits see real client IPs.
+
+### Request limits
+Per client IP: 30 new drafts or rooms a minute (bursts of 10), 300 other API requests a minute
+(bursts of 60) and 30 room connections a minute. One room connection may send 120 messages a
+minute. Request bodies are capped at 16 KB and room messages at 4 KB. Set
+`DRAFTIC_RATE_LIMITS=off` to turn the rate limits off.

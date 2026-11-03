@@ -26,6 +26,7 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from .draft import PICK_MODES, REVEALS, Draft, DraftError, other
 from .catalog import CRITERIA_STYLES, Catalog
+from .limits import Limits, TokenBucket
 
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ"  # no I, L or O: easy to read out loud
 CODE_LENGTH = 5
@@ -271,7 +272,7 @@ class RoomManager:
             pass  # a dead socket is cleaned up by its own receive loop
 
 
-def build_room_router(rooms: RoomManager) -> APIRouter:
+def build_room_router(rooms: RoomManager, limits: Limits) -> APIRouter:
     router = APIRouter()
 
     @router.post("/api/rooms")
@@ -298,16 +299,20 @@ def build_room_router(rooms: RoomManager) -> APIRouter:
             return
         seat = None
         leaving = False
+        messages = TokenBucket(*limits.messages)
         try:
-            first = await asyncio.wait_for(_receive(ws), JOIN_TIMEOUT)
+            first = await asyncio.wait_for(_receive(ws, limits.max_message), JOIN_TIMEOUT)
             if first.get("type") != "join":
                 raise RoomError("Join the room first.")
             seat = await rooms.connect(room, ws, first.get("name"), first.get("token"))
             while True:
-                msg = await _receive(ws)
+                msg = await _receive(ws, limits.max_message)
                 if msg.get("type") == "leave":
                     leaving = True
                     break
+                if limits.enabled and messages.take():
+                    await ws.send_json({"type": "error", "reason": "Too many messages. Slow down."})
+                    continue
                 try:
                     await rooms.handle(room, seat, msg)
                 except RoomError as e:
@@ -325,10 +330,12 @@ def build_room_router(rooms: RoomManager) -> APIRouter:
     return router
 
 
-async def _receive(ws: WebSocket) -> dict:
+async def _receive(ws: WebSocket, max_size: int) -> dict:
     frame = await ws.receive()
     if frame["type"] == "websocket.disconnect":
         raise WebSocketDisconnect(frame.get("code", 1000))
+    if len(frame.get("text") or frame.get("bytes") or "") > max_size:
+        raise RoomError("Message too large.")
     try:
         msg = json.loads(frame.get("text") or "")
     except (ValueError, RecursionError):

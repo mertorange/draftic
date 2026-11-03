@@ -1,0 +1,13 @@
+.git
+.gitignore
+.claude
+.env
+.pytest_cache
+**/__pycache__
+**/*.pyc
+backend/data/cache
+backend/scripts
+tests
+requirements-dev.txt
+Dockerfile
+compose.yaml

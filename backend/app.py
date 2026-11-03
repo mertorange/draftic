@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from .catalog import CATEGORIES, CRITERIA_STYLES, load_catalogs
 from .draft import MARKS, PICK_MODES, REVEALS, DraftError, DraftStore
+from .limits import LimitMiddleware, Limits
 from .rooms import RoomManager, build_room_router
 
 FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
@@ -43,11 +44,13 @@ class ClockRequest(BaseModel):
     mark: str
 
 
-def create_app() -> FastAPI:
+def create_app(limits: Optional[Limits] = None) -> FastAPI:
+    limits = limits or Limits.from_env()
     catalogs = load_catalogs()
     drafts = DraftStore(catalogs)
     rooms = RoomManager(catalogs)
     app = FastAPI(title="Draftić")
+    app.add_middleware(LimitMiddleware, limits=limits)
     app.state.catalogs, app.state.drafts, app.state.rooms = catalogs, drafts, rooms
 
     def refuse(e: DraftError):
@@ -102,7 +105,7 @@ def create_app() -> FastAPI:
         except DraftError as e:
             raise refuse(e)
 
-    app.include_router(build_room_router(rooms))
+    app.include_router(build_room_router(rooms, limits))
 
     @app.get("/health")
     def health():

@@ -1,0 +1,18 @@
+services:
+  draftic:
+    build: .
+    image: draftic
+    ports:
+      - "8010:8010"
+    environment:
+      # Behind a reverse proxy, set this to the proxy's address so rate limits see real client IPs.
+      FORWARDED_ALLOW_IPS: "127.0.0.1"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
