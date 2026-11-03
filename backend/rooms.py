@@ -20,19 +20,22 @@ import json
 import secrets
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Set
+from typing import Dict, Optional
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 
 from .draft import PICK_MODES, REVEALS, Draft, DraftError, other
 from .catalog import CRITERIA_STYLES, Catalog
-from .limits import Limits, TokenBucket
+from .limits import Limits, TokenBucket, client_ip
 
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ"  # no I, L or O: easy to read out loud
 CODE_LENGTH = 5
 CLOCKS = (0, 30, 60, 120)
 IDLE_TTL = 30 * 60       # rooms nobody is in, untouched this long, are removed
+EMPTY_TTL = 5 * 60       # rooms without a seat taken go sooner: nobody is coming back to them
 MAX_ROOMS = 500
+ROOMS_PER_IP = 5         # open rooms one address may have created
+SOCKETS_PER_SEAT = 3     # a few tabs or a reconnect racing a dead socket; more closes the oldest
 JOIN_TIMEOUT = 10.0
 CLOCK_GRACE = 0.4        # seconds past the deadline before the server calls it, for latency
 
@@ -46,7 +49,7 @@ class Seat:
     mark: str
     name: str
     token: str
-    sockets: Set = field(default_factory=set)
+    sockets: Dict = field(default_factory=dict)   # used as an ordered set: oldest first
     ready: bool = False
     rematch: bool = False
 
@@ -59,6 +62,7 @@ class Seat:
 class Room:
     code: str
     settings: dict
+    owner: str = ""      # the address that created it
     seats: Dict[str, Seat] = field(default_factory=dict)
     draft: Optional[Draft] = None
     draft_no: int = 0
@@ -92,16 +96,18 @@ class RoomManager:
 
     # ---------- rooms ----------
 
-    def create(self, settings: dict) -> Room:
+    def create(self, settings: dict, owner: str = "") -> Room:
         self.remove_idle()
+        settings = clean_settings(settings, self.catalogs)
+        if sum(r.owner == owner for r in self.rooms.values()) >= ROOMS_PER_IP:
+            raise RoomError("You have too many open rooms. Leave one first, or wait a few minutes.")
         if len(self.rooms) >= MAX_ROOMS:
             raise RoomError("The server is full, try again later.")
-        settings = clean_settings(settings, self.catalogs)
         while True:
             code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
             if code not in self.rooms:
                 break
-        room = Room(code, settings)
+        room = Room(code, settings, owner)
         self.rooms[code] = room
         return room
 
@@ -116,7 +122,8 @@ class RoomManager:
     def remove_idle(self) -> None:
         now = time.monotonic()
         for code, room in list(self.rooms.items()):
-            if any(s.connected for s in room.seats.values()) or now - room.last_activity < IDLE_TTL:
+            ttl = IDLE_TTL if room.seats else EMPTY_TTL
+            if any(s.connected for s in room.seats.values()) or now - room.last_activity < ttl:
                 continue
             self._stop_clock(room)
             del self.rooms[code]
@@ -134,7 +141,11 @@ class RoomManager:
                 mark = "X" if "X" not in room.seats else "O"
                 seat = Seat(mark, clean_name(name), secrets.token_urlsafe(16))
                 room.seats[mark] = seat
-            seat.sockets.add(ws)
+            seat.sockets[ws] = None
+            while len(seat.sockets) > SOCKETS_PER_SEAT:
+                oldest = next(iter(seat.sockets))
+                del seat.sockets[oldest]
+                await _refuse(oldest, "This seat was opened somewhere else.")
             room.last_activity = time.monotonic()
             await self._send(ws, {"type": "welcome", "mark": seat.mark, "token": seat.token})
             await self._broadcast(room)
@@ -142,7 +153,7 @@ class RoomManager:
 
     async def disconnect(self, room: Room, seat: Seat, ws: WebSocket, leaving: bool = False) -> None:
         async with room.lock:
-            seat.sockets.discard(ws)
+            seat.sockets.pop(ws, None)
             room.last_activity = time.monotonic()
             # Before the draft a seat that leaves is freed; during it, the seat is kept
             if leaving and not (room.draft and room.draft.status == "in_progress"):
@@ -276,9 +287,9 @@ def build_room_router(rooms: RoomManager, limits: Limits) -> APIRouter:
     router = APIRouter()
 
     @router.post("/api/rooms")
-    def create_room(settings: dict):
+    def create_room(settings: dict, request: Request):
         try:
-            return {"code": rooms.create(settings).code}
+            return {"code": rooms.create(settings, client_ip(request.scope)).code}
         except RoomError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -347,7 +358,7 @@ async def _receive(ws: WebSocket, max_size: int) -> dict:
 
 async def _refuse(ws: WebSocket, reason: str) -> None:
     try:
-        await ws.send_json({"type": "error", "reason": reason})
+        await ws.send_json({"type": "error", "reason": reason, "closed": True})
         await ws.close()
     except Exception:
         pass

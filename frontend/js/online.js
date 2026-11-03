@@ -82,7 +82,8 @@ export class RoomConnection {
     } else if (msg.type === 'room') {
       this.handlers.onRoom(msg);
     } else if (msg.type === 'error') {
-      if (!this.welcomed) this.leaving = true; // refused at the door (full room, bad code): don't retry
+      // Refused at the door (full room, bad code) or shut out by the server: don't retry
+      if (!this.welcomed || msg.closed) this.leaving = true;
       this.handlers.onError(msg.reason);
     }
   }

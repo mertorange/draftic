@@ -95,6 +95,10 @@ proxy, set `FORWARDED_ALLOW_IPS` to the proxy's address so rate limits see real 
 
 ### Request limits
 Per client IP: 30 new drafts or rooms a minute (bursts of 10), 300 other API requests a minute
-(bursts of 60) and 30 room connections a minute. One room connection may send 120 messages a
-minute. Request bodies are capped at 16 KB and room messages at 4 KB. Set
-`DRAFTIC_RATE_LIMITS=off` to turn the rate limits off.
+(bursts of 60), 30 room connections a minute and 20 held open at once. One IP keeps at most 5
+open rooms and 20 same-device drafts (a new one replaces its own least recently used). Rooms
+nobody has sat down in go after 5 minutes. One seat holds at most 3 connections, and one
+connection may send 120 messages a minute. Request bodies are capped at 16 KB and room messages
+at 4 KB. Set `DRAFTIC_RATE_LIMITS=off` to turn the rate limits off. Never set
+`FORWARDED_ALLOW_IPS` to `*` on a public server: anyone could then fake their IP and dodge every
+limit.

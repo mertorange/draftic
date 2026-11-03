@@ -1,19 +1,30 @@
 """Draftić server: the player catalogs, hot-seat drafts over HTTP, online rooms over WebSockets."""
 
+import json
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .catalog import CATEGORIES, CRITERIA_STYLES, load_catalogs
 from .draft import MARKS, PICK_MODES, REVEALS, DraftError, DraftStore
-from .limits import LimitMiddleware, Limits
+from .limits import LimitMiddleware, Limits, client_ip
 from .rooms import RoomManager, build_room_router
 
 FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
+
+SECURITY_HEADERS = {
+    "Content-Security-Policy": "default-src 'self'; style-src 'self' https://fonts.googleapis.com; "
+                               "font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; "
+                               "frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "same-origin",
+}
 
 
 class FrontendFiles(StaticFiles):
@@ -50,7 +61,15 @@ def create_app(limits: Optional[Limits] = None) -> FastAPI:
     drafts = DraftStore(catalogs)
     rooms = RoomManager(catalogs)
     app = FastAPI(title="Draftić")
-    app.add_middleware(LimitMiddleware, limits=limits)
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers.update(SECURITY_HEADERS)
+        return response
+
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
+    app.add_middleware(LimitMiddleware, limits=limits)   # added last, so it runs first
     app.state.catalogs, app.state.drafts, app.state.rooms = catalogs, drafts, rooms
 
     def refuse(e: DraftError):
@@ -62,21 +81,27 @@ def create_app(limits: Optional[Limits] = None) -> FastAPI:
                       "categories": [CATEGORIES[k].public() for k in c.categories]}
                 for key, c in catalogs.items()}
 
+    # Every name in each league, encoded once: the list only changes with a new deploy
+    name_lists = {key: json.dumps({"players": c.names()}, ensure_ascii=False, separators=(",", ":")).encode()
+                  for key, c in catalogs.items()}
+
     @app.get("/api/players")
     def players(league: str):
         """Every name in the league, for the extreme-mode autocomplete."""
         if league not in catalogs:
             raise HTTPException(status_code=404, detail="Unknown league")
-        return {"players": catalogs[league].names()}
+        return Response(name_lists[league], media_type="application/json",
+                        headers={"Cache-Control": "public, max-age=3600"})
 
     @app.post("/api/drafts")
-    def new_draft(req: NewDraft):
+    def new_draft(req: NewDraft, request: Request):
         unknown_category = req.category is not None and req.category not in CATEGORIES
         if (req.mode not in PICK_MODES or req.style not in CRITERIA_STYLES or unknown_category
                 or req.reveal not in REVEALS or req.starter not in MARKS):
             raise HTTPException(status_code=400, detail="Unknown game settings")
         try:
-            return drafts.create(req.league, req.mode, req.style, req.category, req.reveal, req.starter).public()
+            return drafts.create(req.league, req.mode, req.style, req.category, req.reveal, req.starter,
+                                 client_ip(request.scope)).public()
         except DraftError as e:
             raise refuse(e)
 

@@ -227,3 +227,94 @@ def test_rate_limits_refuse_bursts():
 def test_oversized_requests_refused(client):
     big = {"league": "nba", "padding": "x" * 20_000}
     assert client.post("/api/rooms", json=big).status_code == 413
+
+
+def unlimited_client():
+    from backend.app import create_app
+    from backend.limits import Limits
+
+    return TestClient(create_app(Limits(enabled=False)))
+
+
+def test_rooms_capped_per_address_and_empty_ones_expire():
+    from backend import rooms as R
+
+    c = unlimited_client()
+    codes = [c.post("/api/rooms", json={"league": "nba"}).json()["code"] for _ in range(R.ROOMS_PER_IP)]
+    refused = c.post("/api/rooms", json={"league": "nba"})
+    assert refused.status_code == 400 and "too many open rooms" in refused.json()["detail"]
+    for room in c.app.state.rooms.rooms.values():
+        room.last_activity -= R.EMPTY_TTL + 1   # nobody ever sat down
+    assert c.post("/api/rooms", json={"league": "nba"}).status_code == 200
+    assert not set(codes) & set(c.app.state.rooms.rooms)
+
+
+def test_one_seat_holds_a_few_sockets_at_most():
+    from backend import rooms as R
+
+    c = unlimited_client()
+    code = c.post("/api/rooms", json={"league": "nba"}).json()["code"]
+    with c.websocket_connect(f"/ws/rooms/{code}") as first:
+        first.send_json({"type": "join", "name": "Ana"})
+        token = first.receive_json()["token"]
+        first.receive_json()
+        extra = []
+        for _ in range(R.SOCKETS_PER_SEAT):
+            cm = c.websocket_connect(f"/ws/rooms/{code}")
+            ws = cm.__enter__()
+            extra.append(cm)
+            ws.send_json({"type": "join", "token": token})
+            assert ws.receive_json()["type"] == "welcome"
+        while (msg := first.receive_json())["type"] == "room":
+            pass
+        assert msg["type"] == "error" and msg["closed"]   # the oldest was shut out
+        assert len(c.app.state.rooms.rooms[code].seats["X"].sockets) == R.SOCKETS_PER_SEAT
+        for cm in extra:
+            cm.__exit__(None, None, None)
+
+
+def test_open_sockets_capped_per_address():
+    from backend.app import create_app
+    from backend.limits import Limits
+
+    c = TestClient(create_app(Limits(sockets=(600, 100), open_sockets=2)))
+    code = c.post("/api/rooms", json={"league": "nba"}).json()["code"]
+    with c.websocket_connect(f"/ws/rooms/{code}") as a, c.websocket_connect(f"/ws/rooms/{code}") as b:
+        for ws in (a, b):
+            ws.send_json({"type": "join", "name": "Ana"})
+            assert ws.receive_json()["type"] == "welcome"
+        with pytest.raises(WebSocketDisconnect):   # a third, held at the same time, is refused
+            with c.websocket_connect(f"/ws/rooms/{code}") as ws:
+                ws.receive_json()
+    with c.websocket_connect("/ws/rooms/ABCDE") as ws:   # closed ones count no longer
+        assert ws.receive_json()["type"] == "error"
+
+
+def test_draft_flood_only_pushes_out_its_own_drafts():
+    from backend.draft import DraftStore
+
+    store = DraftStore(CATALOGS, max_drafts=5, per_owner=3)
+    victim = store.create("nba", "eligible", "classic", owner="player").id
+    flood = [store.create("nba", "eligible", "classic", owner="flood").id for _ in range(10)]
+    assert victim in store.drafts and flood[-3:] == [k for k in store.drafts if k != victim]
+
+    # A full store drops the draft untouched longest, not the oldest one
+    store = DraftStore(CATALOGS, max_drafts=3, per_owner=10)
+    ids = [store.create("nba", "eligible", "classic", owner=str(i)).id for i in range(3)]
+    store.get(ids[0])
+    store.create("nba", "eligible", "classic", owner="new")
+    assert ids[0] in store.drafts and ids[1] not in store.drafts
+
+
+def test_chunked_oversized_body_gets_a_clean_413(client):
+    r = client.post("/api/rooms", content=iter([b'{"league": "nba", "x": "', b"x" * 20_000, b'"}']),
+                    headers={"content-type": "application/json"})
+    assert r.status_code == 413
+
+
+def test_security_headers_and_compressed_player_list(client):
+    page = client.get("/")
+    assert "frame-ancestors 'none'" in page.headers["content-security-policy"]
+    assert page.headers["x-content-type-options"] == "nosniff"
+    names = client.get("/api/players", params={"league": "nba"}, headers={"accept-encoding": "gzip"})
+    assert names.headers["content-encoding"] == "gzip" and "max-age" in names.headers["cache-control"]

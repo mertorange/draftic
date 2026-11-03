@@ -60,6 +60,7 @@ class Limits:
     create: Tuple[float, int] = (30, 10)     # new drafts and rooms, per IP
     api: Tuple[float, int] = (300, 60)       # every other /api request, per IP
     sockets: Tuple[float, int] = (30, 10)    # room socket connections, per IP
+    open_sockets: int = 20                   # room sockets one IP may hold open at once
     messages: Tuple[float, int] = (120, 20)  # messages on one room socket
     max_body: int = 16 * 1024                # bytes in an HTTP request body
     max_message: int = 4 * 1024              # bytes in a room socket message
@@ -82,6 +83,7 @@ class LimitMiddleware:
         self.app = app
         self.limits = limits
         self.rules = {name: Rule(*getattr(limits, name)) for name in ("create", "api", "sockets")}
+        self.open: Dict[str, int] = {}   # IP -> room sockets it holds open
 
     def rule_for(self, scope) -> Optional[Rule]:
         path = scope["path"]
@@ -96,40 +98,58 @@ class LimitMiddleware:
     async def __call__(self, scope, receive, send):
         if scope["type"] not in ("http", "websocket") or not self.limits.enabled:
             return await self.app(scope, receive, send)
+        ip = client_ip(scope)
         rule = self.rule_for(scope)
-        wait = rule.take(client_ip(scope)) if rule else 0.0
-        if wait:
-            if scope["type"] == "websocket":
+        wait = rule.take(ip) if rule else 0.0
+        if scope["type"] == "websocket":
+            if wait or (rule and self.open.get(ip, 0) >= self.limits.open_sockets):
                 await send({"type": "websocket.close", "code": 1008})  # refuses the handshake
-            else:
-                await _reply(send, 429, "Too many requests. Slow down.", {"retry-after": str(int(wait) + 1)})
-            return
-        if scope["type"] == "http":
-            headers = dict(scope.get("headers") or [])
-            length = headers.get(b"content-length")
-            if length and length.isdigit() and int(length) > self.limits.max_body:
-                return await _reply(send, 413, "Request too large.")
-            receive = self._capped(receive, send)
-        await self.app(scope, receive, send)
+                return
+            if not rule:
+                return await self.app(scope, receive, send)
+            self.open[ip] = self.open.get(ip, 0) + 1
+            try:
+                return await self.app(scope, receive, send)
+            finally:
+                self.open[ip] -= 1
+                if not self.open[ip]:
+                    del self.open[ip]
+        if wait:
+            return await _reply(send, 429, "Too many requests. Slow down.", {"retry-after": str(int(wait) + 1)})
+        headers = dict(scope.get("headers") or [])
+        length = headers.get(b"content-length")
+        if length and length.isdigit() and int(length) > self.limits.max_body:
+            return await _reply(send, 413, "Request too large.")
+        await self._capped(scope, receive, send)
 
-    def _capped(self, receive, send):
-        """Counts the body as it arrives, for requests that don't send a Content-Length."""
+    async def _capped(self, scope, receive, send):
+        """Counts the body as it arrives, for requests that don't send a Content-Length: past the
+        cap, the client gets a 413 and the app sees a disconnect, and nothing it sends goes out."""
         seen = 0
+        refused = False
 
-        async def capped():
-            nonlocal seen
+        async def capped_receive():
+            nonlocal seen, refused
+            if refused:
+                return {"type": "http.disconnect"}
             message = await receive()
             if message["type"] == "http.request":
                 seen += len(message.get("body", b""))
                 if seen > self.limits.max_body:
-                    raise BodyTooLarge()
+                    refused = True
+                    await _reply(send, 413, "Request too large.")
+                    return {"type": "http.disconnect"}
             return message
 
-        return capped
+        async def guarded_send(message):
+            if not refused:
+                await send(message)
 
-
-class BodyTooLarge(Exception):
-    """A chunked body that went past the cap; the server answers 500 and drops it."""
+        try:
+            await self.app(scope, capped_receive, guarded_send)
+        except Exception:
+            if not refused:
+                raise
 
 
 async def _reply(send, status: int, detail: str, extra: Optional[dict] = None) -> None:

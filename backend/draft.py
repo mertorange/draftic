@@ -71,7 +71,6 @@ class Draft:
     picks: Dict[str, List[Optional[Pick]]] = field(default_factory=lambda: {m: [None] * len(ROUNDS) for m in MARKS})
     log: List[Pick] = field(default_factory=list)
     status: str = "in_progress"
-    created: float = field(default_factory=time.monotonic)
 
     def __post_init__(self):
         if self.mode not in PICK_MODES:
@@ -228,34 +227,49 @@ def _name_entry(player: Player) -> dict:
 
 
 class DraftStore:
-    """Hot-seat drafts by id; old ones are dropped so memory stays flat."""
+    """Hot-seat drafts by id; old ones are dropped so memory stays flat. The dict is kept in order
+    of last use, so a full store drops the draft nobody has touched longest, not a game in play,
+    and one address making drafts only ever pushes out its own."""
 
-    def __init__(self, catalogs: Dict[str, Catalog], max_age: float = 6 * 3600, max_drafts: int = 2000):
+    def __init__(self, catalogs: Dict[str, Catalog], max_age: float = 6 * 3600, max_drafts: int = 2000,
+                 per_owner: int = 20):
         self.catalogs = catalogs
         self.max_age = max_age
         self.max_drafts = max_drafts
+        self.per_owner = per_owner
         self.drafts: Dict[str, Draft] = {}
+        self.owners: Dict[str, str] = {}     # draft id -> the address that created it
+        self.used: Dict[str, float] = {}     # draft id -> when it was last asked for
 
     def create(self, league: str, mode: str, style: str, category: Optional[str] = None, reveal: str = "end",
-               starter: str = "X") -> Draft:
+               starter: str = "X", owner: str = "") -> Draft:
         if league not in self.catalogs:
             raise DraftError("Unknown league.")
-        self._prune()
+        self._prune(owner)
         draft = Draft(self.catalogs[league], mode=mode, style=style, category=category, reveal=reveal,
                       starter=starter)
         self.drafts[draft.id] = draft
+        self.owners[draft.id] = owner
+        self.used[draft.id] = time.monotonic()
         return draft
 
     def get(self, draft_id: str) -> Draft:
-        draft = self.drafts.get(draft_id)
+        draft = self.drafts.pop(draft_id, None)
         if not draft:
             raise DraftError("No such draft.")
+        self.drafts[draft_id] = draft   # back in at the end: the most recently used
+        self.used[draft_id] = time.monotonic()
         return draft
 
-    def _prune(self) -> None:
+    def _drop(self, draft_id: str) -> None:
+        del self.drafts[draft_id], self.owners[draft_id], self.used[draft_id]
+
+    def _prune(self, owner: str) -> None:
         now = time.monotonic()
-        for key, draft in list(self.drafts.items()):
-            if now - draft.created > self.max_age:
-                del self.drafts[key]
+        for key in [k for k in self.drafts if now - self.used[k] > self.max_age]:
+            self._drop(key)
+        mine = [k for k in self.drafts if self.owners[k] == owner]
+        for key in mine[:max(0, len(mine) - self.per_owner + 1)]:
+            self._drop(key)
         while len(self.drafts) >= self.max_drafts:
-            del self.drafts[next(iter(self.drafts))]
+            self._drop(next(iter(self.drafts)))
