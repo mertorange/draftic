@@ -11,6 +11,7 @@ permissions:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 10   # a hung test fails the run instead of holding it for hours
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,10 +20,12 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt
-      - run: python -m pytest tests -q
+      # -v names each test as it runs; a test stuck for a minute dumps every thread's stack
+      - run: python -m pytest tests -v -o faulthandler_timeout=60
 
   image:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Build the image
