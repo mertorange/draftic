@@ -1,6 +1,9 @@
 // The player slip: the dialog where the team on the clock drafts someone. A pick always
 // comes from the suggestions: the top one is chosen as soon as they show, Enter or Draft
 // takes the chosen one, so a typo never costs a pick.
+//
+// In browse mode (eligible search) the whole list shows before anything is typed, best known
+// first, with nothing chosen yet; typing narrows it to every name that matches.
 
 import { matchNames } from './names.js';
 import { $, closeModal, escapeHtml, isOpen, openModal } from './dom.js';
@@ -19,8 +22,21 @@ export class PlayerSlip {
     this.confirm = $('btn-confirm-select');
     this.entries = null;    // the names to search, or null while they load
     this.minChars = 2;
+    this.browse = false;    // show every name before anything is typed
     this.active = -1;
     this.options = [];
+
+    // One set of listeners for the list, however long it gets
+    const itemAt = (e) => e.target.closest('li[data-index]');
+    this.list.addEventListener('mousedown', (e) => { if (itemAt(e)) e.preventDefault(); });
+    this.list.addEventListener('click', (e) => {
+      const li = itemAt(e);
+      if (li) this.submit(this.options[Number(li.dataset.index)]);
+    });
+    this.list.addEventListener('mousemove', (e) => {
+      const li = itemAt(e);
+      if (li && Number(li.dataset.index) !== this.active) this.setActive(Number(li.dataset.index), false);
+    });
 
     $('btn-cancel-select').addEventListener('click', () => this.cancel());
     this.confirm.addEventListener('click', () => this.submit(this.options[this.active]));
@@ -33,18 +49,21 @@ export class PlayerSlip {
   }
 
   /**
-   * @param {{title, slot, criterion, hint, entries: Array|Promise<Array>, minChars}} round
+   * @param {{title, slot, criterion, hint, entries: Array|Promise<Array>, minChars, browse}} round
    */
-  open({ title, slot, criterion, hint, entries, minChars = 2 }) {
+  open({ title, slot, criterion, hint, entries, minChars = 2, browse = false }) {
     $('slip-title').textContent = title;
     $('req-slot').textContent = slot;
     $('req-crit').textContent = criterion;
     $('slip-hint').textContent = hint || '';
     this.minChars = minChars;
+    this.browse = browse;
     this.input.value = '';
+    this.input.placeholder = browse ? 'Type to narrow the list' : 'Start typing a name';
     this.render([], '');
     if (Array.isArray(entries)) {
       this.entries = entries;
+      this.onInput();
     } else {
       this.entries = null;
       entries.then(list => {
@@ -82,6 +101,10 @@ export class PlayerSlip {
 
   onInput() {
     const query = this.input.value.trim();
+    if (this.browse && !query && this.entries) {
+      this.render(everyone(this.entries), '');
+      return;
+    }
     if (query.length < this.minChars) {
       this.render([], '');
       return;
@@ -90,7 +113,7 @@ export class PlayerSlip {
       this.list.innerHTML = '<li class="none">Loading the names...</li>';
       return;
     }
-    this.render(matchNames(this.entries, query), query);
+    this.render(matchNames(this.entries, query, this.browse ? Infinity : 8), query);
   }
 
   onKeydown(e) {
@@ -113,7 +136,7 @@ export class PlayerSlip {
     this.active = -1;
     this.options = options;
     this.input.removeAttribute('aria-activedescendant');
-    if (!query) {
+    if (!query && !options.length) {
       this.list.innerHTML = '';
       this.input.setAttribute('aria-expanded', 'false');
       this.confirm.disabled = true;
@@ -126,27 +149,32 @@ export class PlayerSlip {
         `<li role="option" id="sugg-${i}" data-index="${i}" aria-selected="false">` +
         `<span>${highlight(option.name, query)}</span>${info(option)}</li>`
       ).join('');
-      this.list.querySelectorAll('li[data-index]').forEach((li, i) => {
-        li.addEventListener('mousedown', (e) => e.preventDefault());
-        li.addEventListener('click', () => this.submit(this.options[i]));
-        li.addEventListener('mousemove', () => this.setActive(i));
-      });
-      this.setActive(0);
+      this.list.scrollTop = 0;
+      // Typed: the top match is chosen. Browsing the whole list: nothing until it's pointed at
+      if (query) this.setActive(0);
     }
     this.input.setAttribute('aria-expanded', 'true');
     this.confirm.disabled = this.active < 0;
   }
 
-  setActive(index) {
+  /** scroll: bring the chosen one into view (keyboard), not when the mouse is on it already */
+  setActive(index, scroll = true) {
     const items = this.list.querySelectorAll('li[data-index]');
-    items.forEach((li, i) => li.setAttribute('aria-selected', String(i === index)));
+    if (items[this.active]) items[this.active].setAttribute('aria-selected', 'false');
     this.active = index;
     this.confirm.disabled = index < 0;
     if (items[index]) {
+      items[index].setAttribute('aria-selected', 'true');
       this.input.setAttribute('aria-activedescendant', items[index].id);
-      items[index].scrollIntoView({ block: 'nearest' });
+      if (scroll) items[index].scrollIntoView({ block: 'nearest' });
     }
   }
+}
+
+/** Every player once, in the list's order (the best known first), without other names. */
+function everyone(entries) {
+  const seen = new Set();
+  return entries.filter(entry => !entry.aka && !seen.has(entry.id) && seen.add(entry.id));
 }
 
 /** The small box beside a name: the other name it matched, or the birth year of a namesake. */

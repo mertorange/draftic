@@ -75,9 +75,10 @@ export class HotSeatGame {
       criterion: `${kind} ${value}`,
       hint: extreme
         ? 'Every player in the league is listed. Pick one who doesn’t fit, or is taken, and you get the shortest who does.'
-        : `${state.pool.length} undrafted players fit. ${revealHint(state)}`,
+        : `${state.pool.length} undrafted players fit, the best known first. ${revealHint(state)}`,
       entries: extreme ? loadLeague(state.league) : makeEntries(state.pool),
-      minChars: extreme ? 2 : 1
+      minChars: extreme ? 2 : 1,
+      browse: !extreme
     });
   }
 

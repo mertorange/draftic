@@ -523,7 +523,15 @@ button:disabled { cursor: not-allowed; }
 .slip-input::placeholder { color: var(--rule); }
 .slip-input:focus { outline: none; }
 
-.suggestions { list-style: none; border-left: 2px solid var(--ink); margin-top: 6px; }
+/* Long lists (every eligible player) scroll inside the slip */
+.suggestions {
+  list-style: none;
+  border-left: 2px solid var(--ink);
+  margin-top: 6px;
+  max-height: min(46vh, 400px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .suggestions:empty { display: none; }
 
 .suggestions li {
