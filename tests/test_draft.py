@@ -181,7 +181,7 @@ def test_players_list_has_no_heights(client):
 
 
 def test_online_room_full_draft(client):
-    code = client.post("/api/rooms", json={"league": "nba", "mode": "eligible", "style": "classic", "clock": 0}).json()["code"]
+    code = client.post("/api/rooms", json={"league": "nba", "mode": "eligible", "style": "classic", "clock": 120}).json()["code"]
     with client.websocket_connect(f"/ws/rooms/{code}") as a, client.websocket_connect(f"/ws/rooms/{code}") as b:
         a.send_json({"type": "join", "name": "Ana"})
         assert a.receive_json()["mark"] == "X"
@@ -290,20 +290,48 @@ def test_open_sockets_capped_per_address():
         assert ws.receive_json()["type"] == "error"
 
 
-def test_draft_flood_only_pushes_out_its_own_drafts():
-    from backend.draft import DraftStore
+def test_games_in_progress_are_never_dropped():
+    from backend.draft import DraftsBusy, DraftStore
 
-    store = DraftStore(CATALOGS, max_drafts=5, per_owner=3)
+    # One address past its cap: refused while all its games are in play, never anyone else's
+    store = DraftStore(CATALOGS, max_drafts=50, per_owner=3)
     victim = store.create("nba", "eligible", "classic", owner="player").id
-    flood = [store.create("nba", "eligible", "classic", owner="flood").id for _ in range(10)]
-    assert victim in store.drafts and flood[-3:] == [k for k in store.drafts if k != victim]
+    flood = [store.create("nba", "eligible", "classic", owner="school").id for _ in range(3)]
+    with pytest.raises(DraftsBusy):
+        store.create("nba", "eligible", "classic", owner="school")
+    assert victim in store.drafts and all(k in store.drafts for k in flood)
 
-    # A full store drops the draft untouched longest, not the oldest one
+    # Its finished or idle games make way, oldest first
+    run_draft(store.get(flood[1]))
+    store.used[flood[2]] -= store.idle + 1
+    store.create("nba", "eligible", "classic", owner="school")
+    store.create("nba", "eligible", "classic", owner="school")
+    assert flood[0] in store.drafts and flood[1] not in store.drafts and flood[2] not in store.drafts
+
+    # A full store drops only drafts that are over or idle, and refuses when there are none
     store = DraftStore(CATALOGS, max_drafts=3, per_owner=10)
     ids = [store.create("nba", "eligible", "classic", owner=str(i)).id for i in range(3)]
-    store.get(ids[0])
+    with pytest.raises(DraftsBusy):
+        store.create("nba", "eligible", "classic", owner="new")
+    store.used[ids[1]] -= store.idle + 1
     store.create("nba", "eligible", "classic", owner="new")
-    assert ids[0] in store.drafts and ids[1] not in store.drafts
+    assert ids[0] in store.drafts and ids[1] not in store.drafts and ids[2] in store.drafts
+
+
+def test_busy_server_answers_429():
+    client = unlimited_client()
+    store = client.app.state.drafts
+    store.per_owner = 1
+    assert client.post("/api/drafts", json={"league": "nba"}).status_code == 200
+    busy = client.post("/api/drafts", json={"league": "nba"})
+    assert busy.status_code == 429 and "Too many games" in busy.json()["detail"]
+
+
+def test_online_rooms_always_have_a_shot_clock():
+    client = unlimited_client()
+    assert client.post("/api/rooms", json={"league": "nba", "clock": 0}).status_code == 400
+    assert client.post("/api/rooms", json={"league": "nba", "clock": 30}).status_code == 200
+    assert client.get("/health").json() == {"ok": True}
 
 
 def test_chunked_oversized_body_gets_a_clean_413(client):
@@ -317,4 +345,8 @@ def test_security_headers_and_compressed_player_list(client):
     assert "frame-ancestors 'none'" in page.headers["content-security-policy"]
     assert page.headers["x-content-type-options"] == "nosniff"
     names = client.get("/api/players", params={"league": "nba"}, headers={"accept-encoding": "gzip"})
-    assert names.headers["content-encoding"] == "gzip" and "max-age" in names.headers["cache-control"]
+    assert names.headers["content-encoding"] == "gzip" and names.headers["cache-control"] == "no-cache"
+    # A browser holding this version is told it's current; any other version gets the list
+    tag = names.headers["etag"]
+    assert client.get("/api/players", params={"league": "nba"}, headers={"if-none-match": tag}).status_code == 304
+    assert client.get("/api/players", params={"league": "nba"}, headers={"if-none-match": '"old"'}).status_code == 200

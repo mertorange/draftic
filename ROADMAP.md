@@ -14,14 +14,15 @@ date. Ideas and pull requests are welcome.
 ## Now: ready to host
 The goal is a public instance people can play on.
 
-- [ ] **CI:** GitHub Actions running the tests on every push and pull request.
-- [ ] **Image builds:** build the Docker image in CI and publish it to GitHub Container Registry.
-- [ ] **First deployment:** a hosted instance behind HTTPS, with a reverse proxy that passes
-      WebSocket upgrades and real client IPs (`FORWARDED_ALLOW_IPS`).
+- [x] **CI:** GitHub Actions running the tests on every push and pull request.
+- [ ] **Image builds:** CI builds and starts the Docker image; publishing it to GitHub Container
+      Registry is still to do.
+- [ ] **First deployment:** a hosted instance. The setup is ready (`docker compose --profile
+      server`, Caddy with HTTPS and real client addresses); it needs a server and a domain.
 - [ ] **Logs and monitoring:** structured request logs, uptime checks on `/health`, and alerts.
 - [ ] **Restarts without lost games:** drain open rooms on shutdown, or warn players that the
       server is restarting.
-- [ ] **Health endpoint:** decide whether room and draft counts stay public.
+- [x] **Health endpoint:** `/health` only answers that the server is up; no counts.
 
 ## Next: more to play
 - [ ] **Play the computer:** a single-player mode against a bot that picks from the eligible

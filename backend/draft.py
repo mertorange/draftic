@@ -33,6 +33,10 @@ class DraftError(Exception):
     """A request the draft refuses (not a turnover): wrong turn, unknown player..."""
 
 
+class DraftsBusy(DraftError):
+    """No room for another draft right now: every one held is still being played."""
+
+
 def other(mark: str) -> str:
     return "O" if mark == "X" else "X"
 
@@ -227,16 +231,19 @@ def _name_entry(player: Player) -> dict:
 
 
 class DraftStore:
-    """Hot-seat drafts by id; old ones are dropped so memory stays flat. The dict is kept in order
-    of last use, so a full store drops the draft nobody has touched longest, not a game in play,
-    and one address making drafts only ever pushes out its own."""
+    """Hot-seat drafts by id. Memory stays flat without ever cutting a game short: only drafts that
+    are over, or that nobody has touched for `idle` seconds, make room for new ones. The dict is
+    kept in order of last use, so those go oldest first. One address (which may be a whole school
+    or office behind one IP) holds at most `per_owner`; past that, or when the store is full of
+    games in play, a new draft is refused rather than someone else's being dropped."""
 
-    def __init__(self, catalogs: Dict[str, Catalog], max_age: float = 6 * 3600, max_drafts: int = 2000,
-                 per_owner: int = 20):
+    def __init__(self, catalogs: Dict[str, Catalog], max_age: float = 6 * 3600, max_drafts: int = 5000,
+                 per_owner: int = 100, idle: float = 15 * 60):
         self.catalogs = catalogs
         self.max_age = max_age
         self.max_drafts = max_drafts
         self.per_owner = per_owner
+        self.idle = idle
         self.drafts: Dict[str, Draft] = {}
         self.owners: Dict[str, str] = {}     # draft id -> the address that created it
         self.used: Dict[str, float] = {}     # draft id -> when it was last asked for
@@ -264,12 +271,24 @@ class DraftStore:
     def _drop(self, draft_id: str) -> None:
         del self.drafts[draft_id], self.owners[draft_id], self.used[draft_id]
 
+    def _done_with(self, key: str, now: float) -> bool:
+        """Over, or left alone long enough that nobody is coming back to it."""
+        return self.drafts[key].status != "in_progress" or now - self.used[key] > self.idle
+
     def _prune(self, owner: str) -> None:
         now = time.monotonic()
         for key in [k for k in self.drafts if now - self.used[k] > self.max_age]:
             self._drop(key)
         mine = [k for k in self.drafts if self.owners[k] == owner]
-        for key in mine[:max(0, len(mine) - self.per_owner + 1)]:
-            self._drop(key)
-        while len(self.drafts) >= self.max_drafts:
-            self._drop(next(iter(self.drafts)))
+        if len(mine) >= self.per_owner:
+            for key in [k for k in mine if self._done_with(k, now)][:len(mine) - self.per_owner + 1]:
+                self._drop(key)
+            if sum(self.owners[k] == owner for k in self.drafts) >= self.per_owner:
+                raise DraftsBusy("Too many games in progress from your network. Finish one, or try again "
+                                 "in a few minutes.")
+        if len(self.drafts) >= self.max_drafts:
+            spare = [k for k in self.drafts if self._done_with(k, now)]
+            for key in spare[:len(self.drafts) - self.max_drafts + 1]:
+                self._drop(key)
+            if len(self.drafts) >= self.max_drafts:
+                raise DraftsBusy("The server is full of games right now. Try again in a few minutes.")

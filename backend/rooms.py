@@ -12,7 +12,8 @@ Server -> client: {"type": "welcome", "mark", "token"}, {"type": "room", ...the 
 the whole room going to both players, so a pick and an expiring clock never both apply.
 
 A player who drops mid-draft keeps their seat: the clock keeps running, so their picks
-become turnovers until they come back.
+become turnovers until they come back. Online drafts always have a shot clock, so a draft can
+never wait forever on someone who has gone.
 """
 
 import asyncio
@@ -30,11 +31,11 @@ from .limits import Limits, TokenBucket, client_ip
 
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ"  # no I, L or O: easy to read out loud
 CODE_LENGTH = 5
-CLOCKS = (0, 30, 60, 120)
+CLOCKS = (30, 60, 120)   # seconds a pick; no 'off' online (see above)
 IDLE_TTL = 30 * 60       # rooms nobody is in, untouched this long, are removed
 EMPTY_TTL = 5 * 60       # rooms without a seat taken go sooner: nobody is coming back to them
 MAX_ROOMS = 500
-ROOMS_PER_IP = 5         # open rooms one address may have created
+ROOMS_PER_IP = 25        # open rooms one address may have created (one IP may be a whole school)
 SOCKETS_PER_SEAT = 3     # a few tabs or a reconnect racing a dead socket; more closes the oldest
 JOIN_TIMEOUT = 10.0
 CLOCK_GRACE = 0.4        # seconds past the deadline before the server calls it, for latency
@@ -80,7 +81,7 @@ def clean_settings(raw: dict, catalogs: Dict[str, Catalog]) -> dict:
     clock = raw.get("clock", 60)
     if (league not in catalogs or mode not in PICK_MODES or style not in CRITERIA_STYLES
             or reveal not in REVEALS or clock not in CLOCKS):
-        raise RoomError("Unknown game settings.")
+        raise RoomError("Unknown game settings. Online rooms need a shot clock of 30, 60 or 120 seconds.")
     return {"league": league, "mode": mode, "style": style, "reveal": reveal, "clock": clock}
 
 
@@ -118,6 +119,12 @@ class RoomManager:
         if room.draft:
             return "playing" if room.draft.status == "in_progress" else "final"
         return "lobby" if len(room.seats) == 2 else "waiting"
+
+    async def cleanup_loop(self, interval: float = 60) -> None:
+        """Removes abandoned rooms now and then, not only when someone opens a new one."""
+        while True:
+            await asyncio.sleep(interval)
+            self.remove_idle()
 
     def remove_idle(self) -> None:
         now = time.monotonic()

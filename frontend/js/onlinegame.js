@@ -111,7 +111,7 @@ export class OnlineGame {
       slot: state.current.slot_name,
       criterion: `${kind} ${value}`,
       hint: extreme
-        ? 'Every player in the league is listed. Pick one who doesn’t fit, or is taken, and you get the shortest who does.'
+        ? 'Every player in the league is listed. Pick one who doesn’t fit, is taken or has no number in the stat, and you get the lowest number who fits.'
         : `${state.pool.length} undrafted players fit, the best known first. ${revealHint(state)}`,
       entries: extreme ? loadLeague(state.league) : makeEntries(state.pool),
       minChars: extreme ? 2 : 1,

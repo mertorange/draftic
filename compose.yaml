@@ -1,12 +1,27 @@
+# Draftić
+#
+#   Local:      docker compose up -d --build                    -> http://localhost:8010
+#   On a server: docker compose --profile server up -d --build   (HTTPS through Caddy; set
+#                DRAFTIC_DOMAIN in .env, copied from .env.example)
+#
+# The app's own port is bound to this machine only: on a server, Caddy is the way in. The app
+# trusts forwarded client addresses from Caddy's fixed address alone, so per-player request
+# limits see real players, and nobody can fake an address by talking to the app directly.
+
+name: draftic
+
 services:
   draftic:
     build: .
     image: draftic
     ports:
-      - "8010:8010"
+      - "127.0.0.1:${DRAFTIC_PORT:-8010}:8010"
     environment:
-      # Behind a reverse proxy, set this to the proxy's address so rate limits see real client IPs.
-      FORWARDED_ALLOW_IPS: "127.0.0.1"
+      FORWARDED_ALLOW_IPS: "172.30.10.2"   # Caddy, below; never "*"
+      DRAFTIC_RATE_LIMITS: ${DRAFTIC_RATE_LIMITS:-on}
+    networks:
+      draftic:
+        ipv4_address: 172.30.10.3
     restart: unless-stopped
     read_only: true
     tmpfs:
@@ -16,3 +31,33 @@ services:
         limits:
           memory: 512M
           cpus: "1.0"
+    # Drafts and rooms live in memory: never run more than one container of this service
+
+  caddy:
+    image: caddy:2.8@sha256:226d1f059b75399fe19182893c7184591c07b97afc8dfcf44eeb80c9a77a530f
+    profiles: ["server"]
+    restart: unless-stopped
+    environment:
+      DRAFTIC_DOMAIN: ${DRAFTIC_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      draftic:
+        ipv4_address: 172.30.10.2
+    depends_on:
+      - draftic
+
+networks:
+  draftic:
+    ipam:
+      config:
+        - subnet: 172.30.10.0/24
+
+volumes:
+  caddy-data:
+  caddy-config:

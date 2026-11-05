@@ -9,6 +9,10 @@ import {
 } from './sheet.js';
 
 const other = (mark) => (mark === 'X' ? 'O' : 'X');
+const RETRY_MS = 2000;
+
+/** The server no longer has this draft: it restarted, or the game sat untouched for hours. */
+const lost = (e) => e.status === 400 && e.detail === 'No such draft.';
 
 export function readNames() {
   const clean = (id, fallback) => $(id).value.trim().slice(0, 16) || fallback;
@@ -74,7 +78,7 @@ export class HotSeatGame {
       slot: state.current.slot_name,
       criterion: `${kind} ${value}`,
       hint: extreme
-        ? 'Every player in the league is listed. Pick one who doesn’t fit, or is taken, and you get the shortest who does.'
+        ? 'Every player in the league is listed. Pick one who doesn’t fit, is taken or has no number in the stat, and you get the lowest number who fits.'
         : `${state.pool.length} undrafted players fit, the best known first. ${revealHint(state)}`,
       entries: extreme ? loadLeague(state.league) : makeEntries(state.pool),
       minChars: extreme ? 2 : 1,
@@ -89,8 +93,10 @@ export class HotSeatGame {
     try {
       this.state = await api.pick(this.state.id, this.state.on_clock, id);
     } catch (e) {
-      setStatus(e.detail || 'That pick did not go through. Try again.', 'error');
       this.busy = false;
+      if (lost(e)) return this.gameLost();
+      setStatus(e.status ? e.detail || 'That pick did not go through. Try again.'
+        : 'Could not reach the server. Check the connection and pick again.', 'error');
       this.ui.clock.start(this.settings.clock);
       return;
     }
@@ -104,10 +110,27 @@ export class HotSeatGame {
     this.ui.slip.close();
     try {
       this.state = await api.shotClock(this.state.id, this.state.on_clock);
-    } finally {
+    } catch (e) {
       this.busy = false;
+      if (lost(e)) return this.gameLost();
+      // The turnover still has to happen: say so, and ask again shortly
+      setStatus('Time is up, but the server didn’t answer. Trying again...', 'error');
+      clearTimeout(this.retry);
+      this.retry = setTimeout(() => this.clockExpired(), RETRY_MS);
+      return;
     }
+    this.busy = false;
     this.update();
+  }
+
+  /** The draft is gone from the server: stop, say why, and point to a new game. */
+  gameLost() {
+    clearTimeout(this.retry);
+    this.ui.clock.start(0);
+    this.ui.slip.close();
+    $('btn-draft').hidden = true;
+    setStatus('This game is no longer on the server (it may have restarted). Go to the menu to start a new one.',
+      'error');
   }
 
   slipCancelled() {
@@ -129,6 +152,7 @@ export class HotSeatGame {
   }
 
   leave() {
+    clearTimeout(this.retry);
     if (this.closeDeal) {
       this.dealing = false;
       this.closeDeal();

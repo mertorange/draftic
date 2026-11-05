@@ -91,6 +91,11 @@ function syncMenuMode() {
   const mode = data.get('mode');
   $('setup-form').dataset.mode = mode;
   $('btn-launch-game').textContent = mode === 'online' ? 'Open a draft room' : 'Start the draft';
+  // Online rooms always run a shot clock (a draft must never wait on a player who has gone)
+  const off = $('setup-form').querySelector('input[name=clock][value="0"]');
+  if (mode === 'online' && off.checked) {
+    $('setup-form').querySelector('input[name=clock][value="60"]').checked = true;
+  }
   renderStatList(data.get('league'));
 }
 
@@ -214,7 +219,7 @@ function setupSound() {
 
 function setup() {
   const form = $('setup-form');
-  form.querySelectorAll('input[name=mode], input[name=league]')
+  form.querySelectorAll('input[name=mode], input[name=league], input[name=clock]')
     .forEach(input => input.addEventListener('change', syncMenuMode));
   api.leagues().then(data => {
     leagues = data;

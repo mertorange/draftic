@@ -40,8 +40,9 @@ draft a player who fits it. Every draft is scored on a stat dealt at random when
 ## Play
 - **Same device:** pass the phone. The shot clock runs in the browser.
 - **Online room:** create a room, send the link or the five-letter code. The server owns the
-  draft and the shot clock. A player who drops keeps their seat, and their clock keeps running.
-  A rematch swaps who picks first.
+  draft and the shot clock, which is always on online (30, 60 or 120 seconds a pick). A player
+  who drops keeps their seat, and their clock keeps running, so the draft never stalls. A
+  rematch swaps who picks first.
 
 ## Run
 ```bash
@@ -67,8 +68,8 @@ A career total is left out when one of its seasons has no figure (steals and blo
 1973-74, rebounds before 1950-51, minutes before 1951-52): a short total would be wrong.
 Coverage (NBA / EuroLeague): positions 4,806 / 2,293, height 4,814 / 2,285, weight 4,805 /
 1,971, points 4,611 / 2,028, steals 3,919 / —. A stat is offered in a league only when at least
-60% of its players have it. Players without a position are left out of the game. Downloads are cached in `backend/data/cache/`
-(delete it to refetch). To pick up a newer Hoop-Tac-Toe dataset, copy its two JSON files into
+60% of its players have it. Players without a position are left out of the game. Downloads are
+cached in `backend/data/cache/` (delete it to refetch). To pick up a newer Hoop-Tac-Toe dataset, copy its two JSON files into
 `backend/data/base/` and rerun the script.
 
 ## Layout
@@ -86,19 +87,47 @@ frontend/
 tests/test_draft.py
 ```
 
-### Docker
+## Docker
+Locally:
 ```bash
-docker compose up --build   # http://localhost:8010
+docker compose up -d --build   # http://localhost:8010
 ```
-The server keeps drafts and rooms in memory, so it runs as a single process. Behind a reverse
-proxy, set `FORWARDED_ALLOW_IPS` to the proxy's address so rate limits see real client IPs.
+On a server, with a domain whose DNS points at it:
+```bash
+cp .env.example .env           # set DRAFTIC_DOMAIN
+docker compose --profile server up -d --build
+```
+The `server` profile adds Caddy in front of the app: it gets the HTTPS certificate, passes the
+online rooms' WebSockets through, and sends each player's real address. The app trusts that
+address from Caddy's fixed one alone (`FORWARDED_ALLOW_IPS` in `compose.yaml`), and its own
+port is bound to the server itself, so nobody can reach it around Caddy to fake an address.
+Never set `FORWARDED_ALLOW_IPS` to `*`.
+
+The server keeps drafts and rooms in memory, so it runs as one process in one container, and a
+restart ends the games in play (players are told and sent back to the menu).
+
+CI (`.github/workflows/ci.yml`) runs the tests and builds and starts the image on every push.
 
 ### Request limits
-Per client IP: 30 new drafts or rooms a minute (bursts of 10), 300 other API requests a minute
-(bursts of 60), 30 room connections a minute and 20 held open at once. One IP keeps at most 5
-open rooms and 20 same-device drafts (a new one replaces its own least recently used). Rooms
-nobody has sat down in go after 5 minutes. One seat holds at most 3 connections, and one
-connection may send 120 messages a minute. Request bodies are capped at 16 KB and room messages
-at 4 KB. Set `DRAFTIC_RATE_LIMITS=off` to turn the rate limits off. Never set
-`FORWARDED_ALLOW_IPS` to `*` on a public server: anyone could then fake their IP and dodge every
-limit.
+Per client address: 30 new drafts or rooms a minute (bursts of 10), 300 other API requests a
+minute (bursts of 60), 30 room connections a minute and 20 held open at once. One address can
+have 25 open rooms and 100 same-device drafts: generous, because a school or an office often
+shares one. A game in progress is never dropped to make room: only finished drafts, or ones
+untouched for 15 minutes, give way, and if none can, the new one is refused with a message.
+Rooms nobody has sat down in go after 5 minutes, and abandoned ones are cleared every minute.
+One seat holds at most 3 connections, and one connection may send 120 messages a minute.
+Request bodies are capped at 16 KB and room messages at 4 KB. Set `DRAFTIC_RATE_LIMITS=off` to
+turn the rate limits off for local testing.
+
+## Credits
+An unofficial fan game, not affiliated with the NBA, the EuroLeague or any club. The player data
+comes from:
+- [Hoop-Tac-Toe](https://github.com/mertorange/basketball-xox)'s datasets, built from the
+  sources below and the official EuroLeague API
+- [Basketball-Reference](https://www.basketball-reference.com) season totals and player info,
+  via [sumitrodatta/bball-reference-datasets](https://github.com/sumitrodatta/bball-reference-datasets)
+- [Basketball GM community rosters](https://github.com/alexnoob/BasketBall-GM-Rosters)
+- [Wikidata](https://www.wikidata.org) (CC0)
+
+The GitHub repositories above carry no license of their own; check the original sites' terms
+before running a public instance.

@@ -1,0 +1,14 @@
+# HTTPS in front of Draftić. Caddy gets the certificate on its own, passes WebSocket upgrades
+# through (the online rooms at /ws/rooms/... need nothing extra), and sends the player's real
+# address in X-Forwarded-For, which the app trusts from this container only.
+{$DRAFTIC_DOMAIN} {
+	encode zstd gzip
+	request_body {
+		max_size 64KB
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	reverse_proxy draftic:8010
+}

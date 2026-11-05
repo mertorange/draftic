@@ -1,6 +1,9 @@
 """Draftić server: the player catalogs, hot-seat drafts over HTTP, online rooms over WebSockets."""
 
+import asyncio
+import hashlib
 import json
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -11,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .catalog import CATEGORIES, CRITERIA_STYLES, load_catalogs
-from .draft import MARKS, PICK_MODES, REVEALS, DraftError, DraftStore
+from .draft import MARKS, PICK_MODES, REVEALS, DraftError, DraftsBusy, DraftStore
 from .limits import LimitMiddleware, Limits, client_ip
 from .rooms import RoomManager, build_room_router
 
@@ -60,7 +63,14 @@ def create_app(limits: Optional[Limits] = None) -> FastAPI:
     catalogs = load_catalogs()
     drafts = DraftStore(catalogs)
     rooms = RoomManager(catalogs)
-    app = FastAPI(title="Draftić")
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        cleanup = asyncio.create_task(rooms.cleanup_loop())
+        yield
+        cleanup.cancel()
+
+    app = FastAPI(title="Draftić", lifespan=lifespan)
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
@@ -73,7 +83,7 @@ def create_app(limits: Optional[Limits] = None) -> FastAPI:
     app.state.catalogs, app.state.drafts, app.state.rooms = catalogs, drafts, rooms
 
     def refuse(e: DraftError):
-        return HTTPException(status_code=400, detail=str(e))
+        return HTTPException(status_code=429 if isinstance(e, DraftsBusy) else 400, detail=str(e))
 
     @app.get("/api/leagues")
     def leagues():
@@ -81,17 +91,22 @@ def create_app(limits: Optional[Limits] = None) -> FastAPI:
                       "categories": [CATEGORIES[k].public() for k in c.categories]}
                 for key, c in catalogs.items()}
 
-    # Every name in each league, encoded once: the list only changes with a new deploy
+    # Every name in each league, encoded once: the list only changes with a new deploy. Players
+    # are picked by their place in it, so a browser must never keep an old copy past a data
+    # update: it checks every time, and the version tag makes that a cheap 304.
     name_lists = {key: json.dumps({"players": c.names()}, ensure_ascii=False, separators=(",", ":")).encode()
                   for key, c in catalogs.items()}
+    name_tags = {key: '"' + hashlib.sha256(body).hexdigest()[:16] + '"' for key, body in name_lists.items()}
 
     @app.get("/api/players")
-    def players(league: str):
+    def players(league: str, request: Request):
         """Every name in the league, for the extreme-mode autocomplete."""
         if league not in catalogs:
             raise HTTPException(status_code=404, detail="Unknown league")
-        return Response(name_lists[league], media_type="application/json",
-                        headers={"Cache-Control": "public, max-age=3600"})
+        headers = {"Cache-Control": "no-cache", "ETag": name_tags[league]}
+        if request.headers.get("if-none-match") == name_tags[league]:
+            return Response(status_code=304, headers=headers)
+        return Response(name_lists[league], media_type="application/json", headers=headers)
 
     @app.post("/api/drafts")
     def new_draft(req: NewDraft, request: Request):
@@ -134,8 +149,7 @@ def create_app(limits: Optional[Limits] = None) -> FastAPI:
 
     @app.get("/health")
     def health():
-        return {"ok": True, "players": {k: len(c.players) for k, c in catalogs.items()},
-                "rooms": len(rooms.rooms), "drafts": len(drafts.drafts)}
+        return {"ok": True}
 
     @app.get("/")
     def index():
