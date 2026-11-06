@@ -13,6 +13,7 @@ export const TEAM = { X: 'A', O: 'B' };
 const MARKS = ['X', 'O'];
 const KIND_LABELS = { team: 'Played for', country: 'Born in', era: 'Played in the', college: 'College' };
 const REVEAL_STEP = 170;   // ms between tiles lighting up at the end
+const CHIME_AFTER_VERDICT = 700;  // ms from a pick's verdict sound to the next team's jingle
 function ORDINAL(n) {
   const suffix = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
@@ -23,6 +24,7 @@ let lastRound = null;      // `${draftId}:${round}`: deal the strip only when it
 let lastPick = null;       // `${draftId}:${pickCount}`: write only the new pick on
 let reveal = null;         // the final reveal: {id, lit: tiles shown so far, running: totals so far, done}
 let revealTimers = [];
+let chimeTimer = null;     // the next team's jingle, waiting for the verdict sound to ring
 
 export function setStatus(msg, type = '') {
   const el = $('game-status-text');
@@ -56,22 +58,27 @@ export function showDeal(state, onGo = () => {}, autoClose = 0) {
   let timer = null;
   const close = () => {
     clearTimeout(timer);
-    button.removeEventListener('click', close);
+    button.removeEventListener('click', start);
     modal.removeEventListener('keydown', onKey);
     modal.classList.remove('active');
     onGo();
   };
+  // Closed to draft (not to leave the game): the first team is on the clock
+  const start = () => {
+    close();
+    sfx.playOnClock();
+  };
   const onKey = (e) => {
     if (e.key === 'Enter' || e.key === 'Escape') {
       e.preventDefault();
-      close();
+      start();
     }
   };
-  button.addEventListener('click', close);
+  button.addEventListener('click', start);
   modal.addEventListener('keydown', onKey);
   modal.classList.add('active');
   button.focus();
-  if (autoClose) timer = setTimeout(close, autoClose);
+  if (autoClose) timer = setTimeout(start, autoClose);
   return close;
 }
 
@@ -172,8 +179,11 @@ export function renderDraft(state, { names, canPick, mine = null, onRevealed = (
   renderAnnounce(state, names, newPick);
 
   if (newPick) {
-    if (state.last.turnover) sfx.playTurnover();
-    else sfx.playScore();
+    // The verdict now; then, once it's rung, the jingle for the team that's on the clock next
+    if (state.last.turnover) sfx.playPickBad();
+    else sfx.playPickGood();
+    clearTimeout(chimeTimer);
+    if (!final) chimeTimer = setTimeout(() => sfx.playOnClock(), CHIME_AFTER_VERDICT);
   }
 }
 

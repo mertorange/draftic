@@ -212,9 +212,11 @@ function setupSound() {
   };
   btn.addEventListener('click', () => {
     sfx.setMuted(!sfx.muted);
+    sfx.preload();
     sync();
   });
   sync();
+  sfx.preload();
 }
 
 function setup() {

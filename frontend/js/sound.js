@@ -1,10 +1,18 @@
-// Sound effects synthesised with the Web Audio API; no audio files.
+// Sound effects: short cues synthesised with the Web Audio API, plus the pick sounds, which are
+// pre-rendered files (sounds/pick-*.wav, made by backend/scripts/make_pick_sounds.py).
 
 const MUTE_KEY = 'draftic:muted';
+// name -> [file, volume]
+const FILES = {
+  chime: ['pick-chime.wav', 0.5],  // a team goes on the clock
+  good: ['pick-good.wav', 0.45],   // a pick that fits
+  bad: ['pick-bad.wav', 0.45]      // a wrong pick, or the shot clock ran out
+};
 
 class SoundFX {
   constructor() {
     this.ctx = null;
+    this.files = {};
     this.muted = false;
     try {
       this.muted = localStorage.getItem(MUTE_KEY) === '1';
@@ -33,6 +41,40 @@ class SoundFX {
     }
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
   }
+
+  /** Fetch the pick sounds ahead of the first pick, so they aren't late waiting on the network. */
+  preload() {
+    if (this.muted) return;
+    for (const name of Object.keys(FILES)) this.file(name);
+  }
+
+  file(name) {
+    if (!this.files[name]) {
+      const [path, volume] = FILES[name];
+      const audio = new Audio(new URL(`../sounds/${path}`, import.meta.url).href);
+      audio.preload = 'auto';
+      audio.volume = volume;
+      this.files[name] = audio;
+    }
+    return this.files[name];
+  }
+
+  playFile(name) {
+    try {
+      if (this.muted) return;
+      const audio = this.file(name);
+      audio.currentTime = 0;
+      const playing = audio.play();
+      if (playing) playing.catch(() => {});  // blocked before any click: stay quiet
+    } catch (e) {}
+  }
+
+  // The draft-night jingle, as a team goes on the clock
+  playOnClock() { this.playFile('chime'); }
+
+  // The pick's verdict: it fits, or it's a turnover (wrong player or the shot clock ran out)
+  playPickGood() { this.playFile('good'); }
+  playPickBad() { this.playFile('bad'); }
 
   // Warning beep for last 5 seconds of shot clock
   playClockBeep() {
@@ -77,42 +119,6 @@ class SoundFX {
       osc2.start(t);
       osc1.stop(t + 0.7);
       osc2.stop(t + 0.7);
-    } catch (e) {}
-  }
-
-  // Net swish / basket made
-  playScore() {
-    try {
-      if (!this.ready()) return;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(480, this.ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(720, this.ctx.currentTime + 0.15);
-      gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.2);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start();
-      osc.stop(this.ctx.currentTime + 0.2);
-    } catch (e) {}
-  }
-
-  // Turnover / wrong pick
-  playTurnover() {
-    try {
-      if (!this.ready()) return;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(220, this.ctx.currentTime);
-      osc.frequency.setValueAtTime(160, this.ctx.currentTime + 0.1);
-      gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.25);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start();
-      osc.stop(this.ctx.currentTime + 0.25);
     } catch (e) {}
   }
 
