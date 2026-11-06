@@ -171,7 +171,7 @@ export class PlayerSlip {
   }
 }
 
-/** Every player once, in the list's order (the best known first), without other names. */
+/** Every player once, in the list's order (shuffled each pick), without other names. */
 function everyone(entries) {
   const seen = new Set();
   return entries.filter(entry => !entry.aka && !seen.has(entry.id) && seen.add(entry.id));

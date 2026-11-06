@@ -350,3 +350,22 @@ def test_security_headers_and_compressed_player_list(client):
     tag = names.headers["etag"]
     assert client.get("/api/players", params={"league": "nba"}, headers={"if-none-match": tag}).status_code == 304
     assert client.get("/api/players", params={"league": "nba"}, headers={"if-none-match": '"old"'}).status_code == 200
+
+
+def test_easy_list_is_shuffled_not_ranked():
+    draft = Draft(CATALOGS["nba"], category="points")
+    first = [p["id"] for p in draft.public()["pool"]]
+    assert first == [p["id"] for p in draft.public()["pool"]]   # steady while the pick is on the clock
+    by_points = sorted(draft.pool(), key=lambda p: -p.values["points"])
+    assert first != [p.id for p in by_points]
+    other = Draft(CATALOGS["nba"], category="points")
+    if other.criterion == draft.criterion:
+        assert [p["id"] for p in other.public()["pool"]] != first   # another game, another order
+    # the best player isn't parked on top: over many games, the leader shows up first rarely
+    tops = 0
+    for _ in range(60):
+        d = Draft(CATALOGS["nba"], category="points")
+        pool = d.public()["pool"]
+        best = max(d.pool(), key=lambda p: p.values["points"]).id
+        tops += pool[0]["id"] == best
+    assert tops < 20

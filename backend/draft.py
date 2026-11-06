@@ -214,8 +214,12 @@ class Draft:
             state["current"] = {"slot": self.slot, "slot_name": SLOT_NAMES[self.slot],
                                 "criterion": self.criterion.public()}
             if self.mode == "eligible":
-                # Names only, in the order the autocomplete ranks ties: the best known first
-                state["pool"] = [_name_entry(p) for p in sorted(self.pool(), key=lambda p: -p.fame)]
+                # Names only, shuffled: fame follows the big numbers, so a ranked list would give the
+                # answer away. The order holds for the whole pick (refreshes, reconnects) and changes
+                # with the next one.
+                pool = self.pool()
+                random.Random(f"{self.id}:{len(self.log)}").shuffle(pool)
+                state["pool"] = [_name_entry(p) for p in pool]
         else:
             state["winner"] = self.winner()
         return state
